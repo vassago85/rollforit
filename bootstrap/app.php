@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\EmbeddedAppHeaders;
+use App\Http\Middleware\EnsureOperator;
 use App\Http\Middleware\VerifyAppProxy;
 use App\Http\Middleware\VerifyPosRequest;
 use App\Http\Middleware\VerifySessionToken;
@@ -26,7 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'shopify.pos' => VerifyPosRequest::class,
             'shopify.webhook' => VerifyWebhookHmac::class,
             'shopify.embedded' => EmbeddedAppHeaders::class,
+            'operator' => EnsureOperator::class,
         ]);
+
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('op', 'op/*')
+            ? route('op.login')
+            : '/');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
