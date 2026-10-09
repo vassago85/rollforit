@@ -3,7 +3,7 @@
 # queue and scheduler reuse rollforit-app:latest, so a single `build app` refreshes all three.
 
 x-app-env: &app-env
-  APP_NAME: "Roll for It"
+  APP_NAME: "Roll4It"
   APP_ENV: production
   APP_DEBUG: "false"
   APP_TIMEZONE: Africa/Johannesburg

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "Starting Roll for It..."
+echo "Starting Roll4It..."
 
 mkdir -p /var/www/html/storage/framework/cache/data \
     /var/www/html/storage/framework/sessions \
@@ -48,7 +48,7 @@ php artisan cache:clear || true
 
 chown -R www-data:www-data /var/www/html/storage
 
-echo "Roll for It is ready."
+echo "Roll4It is ready."
 
 if [ "$#" -gt 0 ]; then
     exec "$@"

@@ -1,4 +1,4 @@
-@extends('layouts.admin', ['title' => 'Roll for It: Terms'])
+@extends('layouts.admin', ['title' => 'Roll4It: Terms'])
 
 @section('content')
 <s-page heading="Terms and conditions">

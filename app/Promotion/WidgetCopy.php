@@ -13,7 +13,7 @@ use Carbon\CarbonImmutable;
  */
 final class WidgetCopy
 {
-    public const DEFAULT_HEADLINE = 'Roll for it!';
+    public const DEFAULT_HEADLINE = 'Roll4It!';
 
     public const DEFAULT_WIN = 'You won {payout} off your order! Code {code} has been applied to your cart.';
 

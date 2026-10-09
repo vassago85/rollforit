@@ -1,4 +1,4 @@
-<h2>Roll for It: Terms and Conditions</h2>
+<h2>Roll4It: Terms and Conditions</h2>
 
 <h3>1. The promoter</h3>
 <p>

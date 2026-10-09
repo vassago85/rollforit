@@ -92,7 +92,7 @@ class DiscountCodeService
             : (int) $settings->min_order;
 
         return [
-            'title' => sprintf('Roll for It %s%s (%s)', $roll->is_test ? 'TEST ' : '', $roll->promo_date->toDateString(), $code),
+            'title' => sprintf('Roll4It %s%s (%s)', $roll->is_test ? 'TEST ' : '', $roll->promo_date->toDateString(), $code),
             'code' => $code,
             'startsAt' => CarbonImmutable::now()->subMinute()->utc()->toIso8601String(),
             'endsAt' => $endsAt->utc()->toIso8601String(),

@@ -1,4 +1,4 @@
-@extends('layouts.admin', ['title' => 'Roll for It: Reporting'])
+@extends('layouts.admin', ['title' => 'Roll4It: Reporting'])
 
 @section('content')
 <s-page heading="Reporting">

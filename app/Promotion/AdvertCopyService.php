@@ -20,7 +20,7 @@ class AdvertCopyService
     public const TEMPLATES = [
         'short_social' => [
             'label' => 'Short social post',
-            'text' => 'Roll for it this {day}. Spend {min_order} or more at {store_name}, roll the die at checkout, and win up to {max_payout} off your order. {odds} One roll per customer per day. T&Cs: {terms_url}',
+            'text' => 'Roll4It this {day}. Spend {min_order} or more at {store_name}, roll the die at checkout, and win up to {max_payout} off your order. {odds} One roll per customer per day. T&Cs: {terms_url}',
         ],
         'long_social' => [
             'label' => 'Long social post',
@@ -32,7 +32,7 @@ class AdvertCopyService
         ],
         'whatsapp' => [
             'label' => 'WhatsApp / SMS',
-            'text' => '{store_name}: Roll for it this {day}. Spend {min_order}+, roll the die, win up to {max_payout} off. {odds_short} One roll per customer per day. T&Cs {terms_url}',
+            'text' => '{store_name}: Roll4It this {day}. Spend {min_order}+, roll the die, win up to {max_payout} off. {odds_short} One roll per customer per day. T&Cs {terms_url}',
         ],
         'banner' => [
             'label' => 'Website banner',
@@ -40,7 +40,7 @@ class AdvertCopyService
         ],
         'print' => [
             'label' => 'Print / in-store',
-            'text' => 'Roll for it every {day} at {store_url}. Spend {min_order} or more, roll the die, win up to {max_payout} off your order. {odds} One roll per customer per day. Full terms at {terms_url}',
+            'text' => 'Roll4It every {day} at {store_url}. Spend {min_order} or more, roll the die, win up to {max_payout} off your order. {odds} One roll per customer per day. Full terms at {terms_url}',
         ],
     ];
 

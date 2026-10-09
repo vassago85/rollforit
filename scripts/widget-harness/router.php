@@ -56,7 +56,7 @@ if ($path === '/apps/roll-for-it/status') {
             ? ['starts_at' => date(DATE_ATOM, time() + $opensIn), 'starts_in' => $opensIn, 'label' => date($opensIn > 86400 ? 'l \a\t H:i' : '\t\o\d\a\y \a\t H:i', time() + $opensIn)]
             : ['starts_at' => date(DATE_ATOM, time() + 604800), 'starts_in' => 604800 - 3600, 'label' => 'next Friday at 08:00'],
         'test' => false, 'currency' => 'ZAR', 'min_order' => 50000,
-        'banner' => 'Spend R500, win up to R1,000 off. T&Cs apply.', 'headline' => 'Roll for it!',
+        'banner' => 'Spend R500, win up to R1,000 off. T&Cs apply.', 'headline' => 'Roll4It!',
         'odds' => 'One in every 10 entries wins.',
         'disclaimer' => 'Your number is just for fun. It does not change your odds: the result is decided when you roll.',
         'spend_to_roll' => 'Spend R500 to roll', 'one_roll' => 'One roll per customer per day.',
@@ -97,7 +97,7 @@ if (isset($_GET['opens_in'])) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Roll for It harness</title>
+  <title>Roll4It harness</title>
   <link rel="stylesheet" href="/assets/rfi-widget.css">
   <style>body { font-family: system-ui, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; background: #f3f4f6; }</style>
 </head>

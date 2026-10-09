@@ -1,7 +1,7 @@
 # Fill client_id and application_url from the Partner Dashboard / Dev Dashboard app,
 # or run `shopify app config link` to generate them.
 client_id = ""
-name = "Roll for It"
+name = "Roll4It"
 application_url = "https://rollforit.example.com"
 embedded = true
 

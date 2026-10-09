@@ -1,7 +1,7 @@
-@extends('layouts.admin', ['title' => 'Roll for It: Settings'])
+@extends('layouts.admin', ['title' => 'Roll4It: Settings'])
 
 @section('content')
-<s-page heading="Roll for It settings">
+<s-page heading="Roll4It settings">
     <s-button slot="primary-action" variant="primary" id="save">Save</s-button>
 
     <s-banner id="load-error" tone="critical" heading="Could not load settings" hidden></s-banner>
@@ -119,7 +119,7 @@
 
     <s-section heading="Point of sale (in-store)">
         <s-stack gap="base">
-            <s-paragraph>Let staff offer a roll on the till. HuntexPos verifies the roll with Roll for It before any money changes hands; winnings come off the invoice directly.</s-paragraph>
+            <s-paragraph>Let staff offer a roll on the till. HuntexPos verifies the roll with Roll4It before any money changes hands; winnings come off the invoice directly.</s-paragraph>
             <s-stack direction="inline" gap="base" alignItems="center">
                 <s-switch id="pos_enabled" data-field="pos_enabled" label="POS integration enabled"></s-switch>
                 <s-badge id="pos-badge" tone="neutral">Not configured</s-badge>
@@ -341,7 +341,7 @@
   }
 
   async function disablePos() {
-    if (!window.confirm('Disable POS integration and clear the secret? HuntexPos will stop being able to call Roll for It until you generate a new secret.')) {
+    if (!window.confirm('Disable POS integration and clear the secret? HuntexPos will stop being able to call Roll4It until you generate a new secret.')) {
       return;
     }
     el('pos-disable').loading = true;

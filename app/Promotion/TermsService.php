@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\View;
  */
 class TermsService
 {
-    public const PAGE_TITLE = 'Roll for It: Terms and Conditions';
+    public const PAGE_TITLE = 'Roll4It: Terms and Conditions';
 
     public function __construct(private readonly ShopifyAdmin $admin) {}
 

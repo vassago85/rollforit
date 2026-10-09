@@ -44,7 +44,7 @@ it('matches the spec templates word for word where they are complete', function 
     $blocks = collect(adverts()['blocks'])->keyBy('key');
 
     expect($blocks['short_social']['text'])->toBe(
-        'Roll for it this Friday. Spend R500 or more at McTactical, roll the die at checkout, and win up to R1,000 off your order. '
+        'Roll4It this Friday. Spend R500 or more at McTactical, roll the die at checkout, and win up to R1,000 off your order. '
         .'One in every 10 rolls wins. One roll per customer per day. T&Cs: https://shop.example.co.za/pages/roll-for-it-terms'
     )->and($blocks['email']['text'])->toStartWith('Subject: Roll the die this Friday, win up to R1,000 off')
         ->and($blocks['long_social']['text'])->toContain('Valid Fridays from 08:00 to 20:00.')

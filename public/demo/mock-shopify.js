@@ -45,7 +45,7 @@
       currency: 'ZAR',
       min_order: MIN_ORDER,
       banner: 'Spend R500, win up to R1,000 off. T&Cs apply.',
-      headline: 'Roll for it!',
+      headline: 'Roll4It!',
       odds: 'One in every 10 entries wins.',
       disclaimer: 'Your number is just for fun. It does not change your odds: the result is decided when you roll.',
       spend_to_roll: 'Spend R500 to roll',

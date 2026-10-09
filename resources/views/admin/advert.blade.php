@@ -1,4 +1,4 @@
-@extends('layouts.admin', ['title' => 'Roll for It: Advert copy'])
+@extends('layouts.admin', ['title' => 'Roll4It: Advert copy'])
 
 @section('content')
 <s-page heading="Advert copy">
