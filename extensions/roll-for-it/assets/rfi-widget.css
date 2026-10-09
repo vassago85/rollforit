@@ -1,0 +1,81 @@
+.rfi-root { margin: 16px 0; }
+.rfi-root[hidden] { display: none !important; }
+.rfi-card {
+  --rfi-accent: #f59e0b;
+  border: 2px solid var(--rfi-accent);
+  border-radius: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #111827;
+  font: inherit;
+  text-align: left;
+}
+.rfi-banner { margin: 0 0 8px; font-weight: 600; font-size: 0.95em; }
+.rfi-banner a { color: inherit; text-decoration: underline; }
+.rfi-title { margin: 0 0 12px; font-size: 1.25em; line-height: 1.2; }
+.rfi-test { font-size: 0.6em; vertical-align: middle; background: #1d4ed8; color: #fff; border-radius: 999px; padding: 2px 8px; }
+.rfi-label { display: block; margin: 10px 0 6px; font-weight: 600; font-size: 0.9em; }
+.rfi-email { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; }
+.rfi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.rfi-num {
+  padding: 10px 0; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111827;
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.rfi-num[aria-pressed="true"] { background: var(--rfi-accent); border-color: var(--rfi-accent); color: #111827; }
+.rfi-num:focus-visible, .rfi-roll:focus-visible, .rfi-email:focus-visible { outline: 3px solid var(--rfi-accent); outline-offset: 2px; }
+.rfi-note, .rfi-fine { margin: 8px 0 0; font-size: 0.8em; color: #4b5563; }
+.rfi-min { margin: 10px 0 0; font-weight: 600; color: #92400e; }
+.rfi-error { margin: 10px 0 0; color: #b91c1c; font-weight: 600; }
+.rfi-roll {
+  display: block; width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 8px;
+  background: #111827; color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+}
+.rfi-roll:disabled { opacity: 0.45; cursor: not-allowed; }
+.rfi-msg { margin: 12px 0 0; font-weight: 600; text-align: center; }
+.rfi-msg--win { color: #166534; font-size: 1.1em; }
+.rfi-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.rfi-stage { position: relative; height: 200px; display: flex; align-items: center; justify-content: center; }
+.rfi-stage canvas { width: 100% !important; height: 100% !important; display: block; }
+
+.rfi-cssdie {
+  --rfi-die: #1f2937; --rfi-num: #fff;
+  width: 110px; height: 130px; display: flex; align-items: center; justify-content: center;
+  background: var(--rfi-die); color: var(--rfi-num);
+  clip-path: polygon(50% 0, 100% 64%, 50% 100%, 0 64%);
+  font-size: 40px; font-weight: 800; padding-top: 22px; box-sizing: border-box;
+}
+.rfi-cssdie--rolling { animation: rfi-tumble 0.45s linear infinite; }
+.rfi-cssdie--landed { animation: rfi-land 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes rfi-tumble {
+  0% { transform: rotate(0) scale(1); }
+  25% { transform: rotate(90deg) scale(0.9) translateY(-6px); }
+  50% { transform: rotate(180deg) scale(1); }
+  75% { transform: rotate(270deg) scale(0.9) translateY(-6px); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+@keyframes rfi-land { from { transform: scale(0.7) rotate(-20deg); } to { transform: scale(1) rotate(0); } }
+
+.rfi-stage--teaser { height: 150px; }
+.rfi-cssdie--idle { animation: rfi-idle 3.2s ease-in-out infinite; }
+@keyframes rfi-idle {
+  0%, 100% { transform: rotate(-6deg) translateY(0); }
+  50% { transform: rotate(6deg) translateY(-8px); }
+}
+
+.rfi-next { margin: 14px 0 0; padding-top: 12px; border-top: 1px dashed #d1d5db; text-align: center; }
+.rfi-next[hidden] { display: none; }
+.rfi-next-label { margin: 0 0 8px; font-weight: 600; }
+.rfi-timer { display: flex; justify-content: center; gap: 8px; margin: 0; font-variant-numeric: tabular-nums; }
+.rfi-t {
+  display: flex; flex-direction: column; align-items: center; min-width: 52px; padding: 6px 4px;
+  border-radius: 8px; background: var(--rfi-accent); color: #111827;
+}
+.rfi-t b { font-size: 1.5em; line-height: 1.1; }
+.rfi-t small { font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.rfi-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rfi-cssdie--rolling, .rfi-cssdie--landed, .rfi-cssdie--idle { animation: none; }
+  .rfi-cssdie--rolling span { opacity: 0.4; }
+}

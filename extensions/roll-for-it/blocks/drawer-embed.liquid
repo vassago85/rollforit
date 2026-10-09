@@ -1,0 +1,33 @@
+<script type="application/json" id="rfi-embed-config">
+  {
+    "proxy": "/apps/roll-for-it",
+    "currency": {{ cart.currency.iso_code | json }},
+    "die3d": {{ 'rfi-die3d.js' | asset_url | json }},
+    "drawerSelector": {{ block.settings.drawer_selector | json }},
+    "cartPageFallback": {{ block.settings.cart_page_fallback | json }},
+    "template": {{ template.name | json }}
+  }
+</script>
+
+{% schema %}
+{
+  "name": "Roll for It (cart drawer)",
+  "target": "body",
+  "javascript": "rfi-widget.js",
+  "stylesheet": "rfi-widget.css",
+  "settings": [
+    {
+      "type": "text",
+      "id": "drawer_selector",
+      "label": "Cart drawer selector",
+      "info": "Optional. CSS selector of the element in your cart drawer the widget should appear above, for example the drawer footer. Leave blank to detect Dawn and Horizon automatically."
+    },
+    {
+      "type": "checkbox",
+      "id": "cart_page_fallback",
+      "label": "Also show on the cart page when the Roll for It block isn't added there",
+      "default": true
+    }
+  ]
+}
+{% endschema %}

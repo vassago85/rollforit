@@ -1,0 +1,25 @@
+<div
+  class="rfi-root"
+  data-rfi
+  data-placement="cart"
+  data-proxy="/apps/roll-for-it"
+  data-currency="{{ cart.currency.iso_code }}"
+  data-die3d="{{ 'rfi-die3d.js' | asset_url }}"
+  hidden
+></div>
+
+{% schema %}
+{
+  "name": "Roll for It",
+  "target": "section",
+  "javascript": "rfi-widget.js",
+  "stylesheet": "rfi-widget.css",
+  "enabled_on": { "templates": ["cart"] },
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Shows the Roll for It die on promo days. Configure everything in the Roll for It app."
+    }
+  ]
+}
+{% endschema %}

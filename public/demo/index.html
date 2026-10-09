@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roll for It · McTactical preview</title>
+  <meta name="description" content="A dice-roll cart promotion for McTactical: spend R500, win up to R1,000 off.">
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="demo.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span> Roll for It</div>
+    <nav aria-label="Sections">
+      <a href="#demo">Try it</a>
+      <a href="#how">How it works</a>
+      <a href="#safe">Safeguards</a>
+      <a href="#numbers">The numbers</a>
+      <a href="#admin">Your side</a>
+      <a href="#decide">Decisions</a>
+    </nav>
+    <span class="for">Preview for Eddie · McTactical</span>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">A cart promotion for McTactical</p>
+        <h1>Spend R500. Roll the die. <em>Win up to R1,000 off.</em></h1>
+        <p class="lead">On promo days, customers with R500 or more in their cart get one roll of a 10-sided die. One in every 10 rollers wins money off that order, and the code is applied to their cart automatically.</p>
+        <ul class="chips">
+          <li>Min spend <b>R500</b></li>
+          <li>Prize up to <b>R1,000</b></li>
+          <li><b>1 in 10</b> rollers win</li>
+          <li>Fridays <b>08:00–17:00</b></li>
+        </ul>
+        <a class="btn" href="#demo">Roll the die yourself ↓</a>
+        <p class="muted small" style="margin-top:14px">All amounts, days and odds on this page are example settings. You choose the real ones.</p>
+      </div>
+      <div class="hero-die" aria-hidden="true"><div class="big">10</div></div>
+    </div>
+  </section>
+
+  <section id="demo">
+    <div class="wrap">
+      <p class="eyebrow">Live demo</p>
+      <h2>This is what your customers see in the cart</h2>
+      <p class="lead">This is the real widget running on a pretend cart. Change the quantities, pick a number and roll. Nothing here touches the shop, and the codes aren't real.</p>
+
+      <div class="demo-controls">
+        <div class="seg" role="group" aria-label="Demo outcome">
+          <button type="button" data-outcome="fair" aria-pressed="true">Real odds (1 in 10)</button>
+          <button type="button" data-outcome="win" aria-pressed="false">Show me a win</button>
+          <button type="button" data-outcome="loss" aria-pressed="false">Show me a loss</button>
+        </div>
+        <button type="button" class="btn btn--ghost" id="roll-again">Roll again</button>
+        <span class="tally" id="tally" aria-live="polite">Rolls: <b>0</b> · Wins: <b>0</b></span>
+      </div>
+
+      <div class="demo-grid">
+        <div class="store">
+          <div class="store-bar"><i></i><i></i><i></i><span>mctactical.co.za/cart</span></div>
+          <div class="store-body">
+            <h3>Your cart</h3>
+            <div id="cart-lines"></div>
+            <div class="totals">
+              <div><span>Subtotal</span><span id="subtotal">R0</span></div>
+              <div class="discount" id="discount-row" hidden><span id="discount-label">Roll for It</span><span id="discount">−R0</span></div>
+              <div class="grand"><span>Total</span><span id="total">R0</span></div>
+            </div>
+            <button type="button" class="checkout" disabled>Check out (demo)</button>
+          </div>
+        </div>
+        <div>
+          <iframe class="widget-frame" id="frame-open" title="Roll for It widget demo" loading="eager"></iframe>
+          <p class="frame-note">On the real store this sits on the cart page and in the slide-out cart drawer, styled in your colours.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <p class="eyebrow">How it works</p>
+      <h2>Four steps for the customer, about ten seconds</h2>
+      <p class="lead">It sits right where people decide to buy, and it gives them a reason to add that extra item to reach the minimum.</p>
+      <ol class="steps">
+        <li><h3>Reach the minimum</h3><p>The widget shows how much more they need to spend before they can roll. Gift cards don't count.</p></li>
+        <li><h3>Email and a number</h3><p>They enter their email and pick a number from 1 to 10. The number is just for fun, and the widget says so.</p></li>
+        <li><h3>Roll</h3><p>A 3D die tumbles across the card. Older phones and people who prefer less motion get a simple version instead.</p></li>
+        <li><h3>Win, and it's applied</h3><p>Winners get a single-use code that's added to their cart for them and works until midnight. Everyone else gets a friendly "not this time".</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Between promo days</p>
+        <h2>A countdown that brings them back</h2>
+        <p class="lead">When the promo isn't running, the widget doesn't disappear. It stays on the cart with a live countdown to the next roll day, so every visit during the week is a reminder to come back on Friday.</p>
+        <ul class="checks">
+          <li><b>After a roll</b>, win or lose, the countdown to the next promo day shows under the result.</li>
+          <li><b>At 08:00 on promo day</b>, the countdown turns into the roll form by itself. No refresh needed.</li>
+          <li><b>Can be switched off</b> in settings if you'd rather it only appeared on promo days.</li>
+        </ul>
+      </div>
+      <iframe class="widget-frame" id="frame-upcoming" title="Countdown demo" loading="lazy" style="min-height:360px"></iframe>
+    </div>
+  </section>
+
+  <section id="safe">
+    <div class="wrap">
+      <p class="eyebrow">Safeguards</p>
+      <h2>Built so it can't cost you more than you've decided</h2>
+      <p class="lead">The die is just the show. Every result is decided on our server, never in the customer's browser, and every limit is checked again at the moment of the roll.</p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Your money is capped</h3>
+          <ul class="checks">
+            <li><b>Never more than your maximum prize</b>, and never more than what's in the cart.</li>
+            <li><b>Optional daily budget and daily winner limit.</b> When either is reached, rolling closes for the day.</li>
+            <li><b>Fixed rand amounts only</b>, never a percentage.</li>
+            <li><b>A hard stop:</b> if a prize ever came out above your maximum, no code is created and it's logged.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Codes can't be abused</h3>
+          <ul class="checks">
+            <li><b>Single use</b>, and it expires at midnight on the promo day.</li>
+            <li><b>Can't be combined</b> with other discount codes.</li>
+            <li><b>Doesn't cover shipping or gift cards.</b> You can exclude whole collections too.</li>
+            <li><b>The minimum spend is checked again</b> when the code is used at checkout.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Fair and honest</h3>
+          <ul class="checks">
+            <li><b>Guaranteed odds:</b> rolls are dealt in groups of 10 with exactly one winner per group, so "one in every 10 wins" is literally true.</li>
+            <li><b>One roll per email per promo day.</b> Rolling again just shows the same result.</li>
+            <li><b>The odds and a T&amp;Cs link</b> are always on the widget.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Legal and privacy</h3>
+          <ul class="checks">
+            <li><b>A terms page is generated on your store</b> from your settings and updated when they change. Each version is kept.</li>
+            <li><b>Written with the Consumer Protection Act's competition rules in mind.</b> Have your lawyer check it before launch.</li>
+            <li><b>POPIA:</b> emails are stored scrambled (one-way), IP addresses are deleted after 90 days, and Shopify's customer data requests are handled.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="numbers">
+    <div class="wrap">
+      <p class="eyebrow">The numbers</p>
+      <h2>What could it cost you?</h2>
+      <p class="lead">Change the settings and see the worst case. The worst case assumes every winner had at least the maximum prize in their cart and every code gets used.</p>
+      <div class="calc">
+        <div class="card">
+          <div class="field"><label for="c-min">Minimum spend to roll (R)</label><input id="c-min" type="number" min="1" step="50" value="500"></div>
+          <div class="field"><label for="c-max">Maximum prize (R)</label><input id="c-max" type="number" min="1" step="50" value="1000"></div>
+          <div class="field"><label for="c-n">Odds</label>
+            <select id="c-n"><option value="5">1 in 5</option><option value="8">1 in 8</option><option value="10" selected>1 in 10</option><option value="15">1 in 15</option><option value="20">1 in 20</option></select>
+          </div>
+          <div class="field"><label for="c-rolls">Rolls per promo day</label><input id="c-rolls" type="number" min="0" step="5" value="60"></div>
+          <div class="field"><label for="c-aov">Average cart of people who roll (R)</label><input id="c-aov" type="number" min="0" step="50" value="1150"></div>
+          <div class="field"><label for="c-budget">Daily prize budget (R, optional)</label><input id="c-budget" type="number" min="0" step="500" placeholder="No limit"></div>
+          <div class="field"><label for="c-days">Promo days per month</label><input id="c-days" type="number" min="1" max="31" value="4"></div>
+        </div>
+        <div>
+          <div class="stats">
+            <div class="stat"><div class="k">Worst-case cost per roll</div><div class="v amber" id="o-per-roll">–</div></div>
+            <div class="stat"><div class="k">Winners per promo day (average)</div><div class="v" id="o-winners">–</div></div>
+            <div class="stat"><div class="k">Worst-case prizes per promo day</div><div class="v amber" id="o-day">–</div></div>
+            <div class="stat"><div class="k">Sales from people who roll, per day</div><div class="v good" id="o-revenue">–</div></div>
+            <div class="stat"><div class="k">Prizes as % of those sales (worst case)</div><div class="v" id="o-pct">–</div></div>
+            <div class="stat"><div class="k">Worst-case prizes per month</div><div class="v amber" id="o-month">–</div></div>
+          </div>
+          <p class="callout" id="o-note"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="admin">
+    <div class="wrap">
+      <p class="eyebrow">Your side</p>
+      <h2>Everything is managed inside Shopify admin</h2>
+      <p class="lead">Roll for It installs as an app on your store. There's nothing extra to log into.</p>
+      <div class="grid-3">
+        <div class="card"><div class="icon">⚙</div><h3>Settings</h3><p>Promo days and times, minimum spend, maximum prize, odds, daily limits, excluded collections, colours, sound and wording. It shows a live example and the worst-case cost per roll as you type.</p></div>
+        <div class="card"><div class="icon">§</div><h3>Terms page</h3><p>Generated and published on your store, and kept up to date when settings change. Every roll records which version of the terms the customer saw.</p></div>
+        <div class="card"><div class="icon">✎</div><h3>Advert copy</h3><p>Six ready-made versions: short and long social posts, email, WhatsApp, banner and print. Each has a copy button and always includes the odds and terms link.</p></div>
+        <div class="card"><div class="icon">▤</div><h3>Reporting</h3><p>Today's rolls and winners, and every promo day's sales against prizes paid out. Export to a spreadsheet.</p></div>
+        <div class="card"><div class="icon">✓</div><h3>Test mode</h3><p>A private link lets you force a win or a loss on the real store before going live. Test rolls don't count in the reports.</p></div>
+        <div class="card"><div class="icon">⏻</div><h3>One switch</h3><p>Turn it on or off at any time. It can't be switched on until the minimum spend, maximum prize, days and a published terms page are all set.</p></div>
+      </div>
+
+      <div class="card" style="margin-top:24px; overflow-x:auto">
+        <h3>End-of-promo report <span class="badge">Example figures</span></h3>
+        <p style="margin-bottom:12px">After each promo day you see total sales against prizes actually used, worked out from your Shopify orders.</p>
+        <table class="report">
+          <thead><tr><th>Promo day</th><th class="num">Rolls</th><th class="num">Winners</th><th class="num">Total sales</th><th class="num">Sales from rollers</th><th class="num">Prizes used</th><th class="num">Prizes % of sales</th></tr></thead>
+          <tbody>
+            <tr><td>Friday, week 1</td><td class="num">62</td><td class="num">6</td><td class="num">R148,200</td><td class="num">R71,940</td><td class="num">R4,870</td><td class="num">3.3%</td></tr>
+            <tr><td>Friday, week 2</td><td class="num">78</td><td class="num">8</td><td class="num">R171,500</td><td class="num">R88,310</td><td class="num">R6,420</td><td class="num">3.7%</td></tr>
+            <tr><td>Friday, week 3</td><td class="num">91</td><td class="num">9</td><td class="num">R196,800</td><td class="num">R104,560</td><td class="num">R7,350</td><td class="num">3.7%</td></tr>
+          </tbody>
+          <tfoot><tr><td>Campaign</td><td class="num">231</td><td class="num">23</td><td class="num">R516,500</td><td class="num">R264,810</td><td class="num">R18,640</td><td class="num">3.6%</td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="decide">
+    <div class="wrap">
+      <p class="eyebrow">Before we switch it on</p>
+      <h2>What we need from you, Eddie</h2>
+      <p class="lead">Everything else is ready. These are your calls; the right-hand column shows what this page uses.</p>
+      <ol class="decisions">
+        <li><div><b>Promo days and times</b><p>Which day or days, and the hours rolling is open.</p></div><span class="def">Example: <b>Fri 08:00–17:00</b></span></li>
+        <li><div><b>Minimum spend</b><p>What's in the cart before someone can roll (gift cards don't count).</p></div><span class="def">Example: <b>R500</b></span></li>
+        <li><div><b>Maximum prize</b><p>The most a single winner can get off their order.</p></div><span class="def">Example: <b>R1,000</b></span></li>
+        <li><div><b>Odds</b><p>Guaranteed "one in every N wins", or a straight chance per roll.</p></div><span class="def">Example: <b>1 in 10, guaranteed</b></span></li>
+        <li><div><b>Daily budget or winner limit</b><p>Optional. Rolling closes for the day once it's reached.</p></div><span class="def">Example: <b>none</b></span></li>
+        <li><div><b>Excluded collections</b><p>Anything that must never be discounted (prizes then only apply to the rest of the cart).</p></div><span class="def">Example: <b>none</b></span></li>
+        <li><div><b>Promoter details for the terms</b><p>Company name, registration number, address and contact details.</p></div><span class="def"><b>Needed</b></span></li>
+        <li><div><b>Lawyer review</b><p>A quick check of the generated terms page before launch.</p></div><span class="def"><b>Recommended</b></span></li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b style="color:var(--text)">Next steps:</b> agree the numbers above, install the app on McTactical with the widget switched off, test it privately on the live store with test mode, then switch it on for the first promo day.</p>
+    <p class="small">Preview only. The die, cart and codes on this page are simulated.</p>
+  </div>
+</footer>
+
+<script src="demo.js"></script>
+</body>
+</html>

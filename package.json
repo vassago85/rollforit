@@ -1,0 +1,23 @@
+{
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "build:die": "esbuild resources/die3d/index.js --bundle --minify --format=iife --global-name=RFIDie3D --target=es2019 --legal-comments=eof --outfile=extensions/roll-for-it/assets/rfi-die3d.js",
+        "demo:assets": "node -e \"for (const f of ['rfi-widget.js','rfi-widget.css','rfi-die3d.js']) require('fs').copyFileSync('extensions/roll-for-it/assets/'+f,'public/demo/assets/'+f)\"",
+        "dev": "vite"
+    },
+    "devDependencies": {
+        "@tailwindcss/vite": "^4.0.0",
+        "concurrently": "^10.0.3",
+        "esbuild": "^0.28.2",
+        "laravel-vite-plugin": "^3.1",
+        "tailwindcss": "^4.0.0",
+        "three": "^0.186.1",
+        "vite": "^8.0.0"
+    },
+    "optionalDependencies": {
+        "@laravel/multiplex": "^0.4.1"
+    }
+}

@@ -1,0 +1,128 @@
+# Roll for It production stack (/opt/rollforit), behind Nginx Proxy Manager.
+# `app` serves HTTP on ${APP_PORT:-8094}; NPM terminates TLS.
+# queue and scheduler reuse rollforit-app:latest, so a single `build app` refreshes all three.
+
+x-app-env: &app-env
+  APP_NAME: "Roll for It"
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_TIMEZONE: Africa/Johannesburg
+  TZ: Africa/Johannesburg
+  APP_URL: ${APP_URL:?APP_URL must be set}
+  APP_KEY: ${APP_KEY:?APP_KEY must be set}
+  LOG_CHANNEL: stack
+  LOG_STACK: daily
+  DB_CONNECTION: pgsql
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_DATABASE: rollforit
+  DB_USERNAME: rollforit
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  CACHE_STORE: redis
+  SESSION_DRIVER: file
+  QUEUE_CONNECTION: redis
+  SHOPIFY_API_KEY: ${SHOPIFY_API_KEY:?SHOPIFY_API_KEY must be set}
+  SHOPIFY_API_SECRET: ${SHOPIFY_API_SECRET:?SHOPIFY_API_SECRET must be set}
+  SHOPIFY_API_VERSION: ${SHOPIFY_API_VERSION:-2026-10}
+  SHOPIFY_SCOPES: ${SHOPIFY_SCOPES:-write_discounts,read_products,write_online_store_pages,write_app_proxy,read_orders}
+  ROLL_EMAIL_PEPPER: ${ROLL_EMAIL_PEPPER:?ROLL_EMAIL_PEPPER must be set}
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rollforit-app:latest
+    container_name: rollforit-app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8094}:80"
+    environment: *app-env
+    volumes:
+      - app-logs:/var/www/html/storage/logs
+    networks:
+      - rollforit-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    image: rollforit-app:latest
+    container_name: rollforit-scheduler
+    restart: unless-stopped
+    entrypoint: []
+    user: "www-data:www-data"
+    command: sh -c "while true; do php /var/www/html/artisan schedule:run --no-interaction; sleep 60; done"
+    environment: *app-env
+    volumes:
+      - app-logs:/var/www/html/storage/logs
+    networks:
+      - rollforit-network
+    depends_on:
+      - app
+      - db
+      - redis
+
+  queue:
+    image: rollforit-app:latest
+    container_name: rollforit-queue
+    restart: unless-stopped
+    entrypoint: []
+    user: "www-data:www-data"
+    command: php /var/www/html/artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+    environment: *app-env
+    volumes:
+      - app-logs:/var/www/html/storage/logs
+    networks:
+      - rollforit-network
+    depends_on:
+      - app
+      - db
+      - redis
+
+  db:
+    image: postgres:16-alpine
+    container_name: rollforit-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rollforit
+      POSTGRES_USER: rollforit
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      TZ: Africa/Johannesburg
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - rollforit-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rollforit -d rollforit"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: rollforit-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - rollforit-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  rollforit-network:
+    driver: bridge
+
+volumes:
+  app-logs:
+  db-data:
+  redis-data:

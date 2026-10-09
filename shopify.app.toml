@@ -1,0 +1,35 @@
+# Fill client_id and application_url from the Partner Dashboard / Dev Dashboard app,
+# or run `shopify app config link` to generate them.
+client_id = ""
+name = "Roll for It"
+application_url = "https://rollforit.example.com"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[access_scopes]
+scopes = "write_discounts,read_products,write_online_store_pages,write_app_proxy,read_orders"
+
+[auth]
+redirect_urls = []
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/api/webhooks"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/api/webhooks"
+
+[app_proxy]
+url = "https://rollforit.example.com/api/proxy"
+prefix = "apps"
+subpath = "roll-for-it"
+
+[pos]
+embedded = false
