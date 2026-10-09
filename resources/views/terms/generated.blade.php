@@ -22,8 +22,17 @@
     <li>Add products worth at least {{ $minOrder }} to your cart. Gift cards and shipping do not count towards this amount.</li>
     <li>On the cart page, enter your email address, pick a number from 1 to 10 and roll the die.</li>
     <li>The number you pick is for fun only. It does not affect whether you win.</li>
-    <li>You may roll once per email address per promo day. If you roll again with the same email address on the same day, you will see your original result.</li>
+    <li>You may roll once per promo day. The limit is enforced per email address and per phone number. If you give us both and either one has already rolled today, the earlier result applies.</li>
     <li>The promoter may limit the number of rolls from one connection to prevent abuse.</li>
+</ul>
+
+<h3>3a. Entering in store</h3>
+<ul>
+    <li>If you are shopping in store, a staff member may offer you a roll before you pay once your sale reaches {{ $minOrder }}.</li>
+    <li>You will be asked for your email address or your cell phone number. We use this only to make sure the same person does not roll twice on the same day (online and in-store entries share the same daily limit).</li>
+    <li>The in-store die is run by the promoter's server, exactly like the online version. The result is final the moment the roll is made.</li>
+    <li>If you win, the discount is applied to the sale on the till right away. There is no code to carry away — the win cannot be used on a future visit, cannot be split across sales and cannot be refunded for cash.</li>
+    <li>Prizes won in store still come out of the same daily allocation as online wins.</li>
 </ul>
 
 <h3>4. How winners are chosen</h3>
@@ -60,7 +69,7 @@
 
 <h3>8. Your information</h3>
 <ul>
-    <li>Your email address is used only to enforce one roll per email address per promo day. It is stored as a one-way keyed hash, not as readable text, and is not used for marketing.</li>
+    <li>Your email address and (for in-store entries) your cell phone number are used only to enforce one roll per promo day. Both are stored as one-way keyed hashes, not as readable text, and are never used for marketing.</li>
     <li>Your IP address is recorded to prevent abuse and is deleted after {{ $ipDays }} days.</li>
     <li>Roll records are kept for {{ $retentionYears }} years to meet record-keeping obligations for promotional competitions, then deleted.</li>
     <li>To ask about or delete your information, contact {{ $settings->promoter_email }}.</li>

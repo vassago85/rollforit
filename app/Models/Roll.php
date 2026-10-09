@@ -20,6 +20,10 @@ class Roll extends Model
 
     public const CODE_REFUSED = 'refused';
 
+    public const CHANNEL_ONLINE = 'online';
+
+    public const CHANNEL_POS = 'pos';
+
     protected $guarded = ['id'];
 
     protected function casts(): array

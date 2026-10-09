@@ -46,11 +46,19 @@ class ReportingController extends Controller
                 'payout_formatted' => Money::format((int) $row->payout, $symbol),
             ]);
 
-        $recent = Roll::where('shop_id', $shop->id)->whereDate('promo_date', $today)
+        $channel = $request->query('channel');
+        if (! in_array($channel, [Roll::CHANNEL_ONLINE, Roll::CHANNEL_POS], true)) {
+            $channel = null;
+        }
+
+        $recent = Roll::where('shop_id', $shop->id)
+            ->whereDate('promo_date', $today)
+            ->when($channel, fn ($q) => $q->where('channel', $channel))
             ->orderByDesc('id')->limit(200)->get()
             ->map(fn (Roll $r) => [
                 'time' => $r->created_at->setTimezone($shop->timezone)->format('H:i:s'),
                 'won' => $r->won,
+                'channel' => $r->channel,
                 'payout_formatted' => $r->won ? Money::format($r->payout, $symbol) : '',
                 'cart_formatted' => Money::format($r->cart_subtotal, $symbol),
                 'picked' => $r->picked_number,
@@ -59,6 +67,18 @@ class ReportingController extends Controller
                 'code_status' => $r->code_status,
                 'test' => $r->is_test,
             ]);
+
+        $channelBreakdown = Roll::where('shop_id', $shop->id)
+            ->whereDate('promo_date', $today)
+            ->where('is_test', false)
+            ->selectRaw('channel, count(*) as rolls, count(*) filter (where won) as winners, coalesce(sum(payout) filter (where won), 0) as payout')
+            ->groupBy('channel')->get()
+            ->mapWithKeys(fn ($row) => [$row->channel => [
+                'rolls' => (int) $row->rolls,
+                'winners' => (int) $row->winners,
+                'payout' => (int) $row->payout,
+                'payout_formatted' => Money::format((int) $row->payout, $symbol),
+            ]])->all();
 
         return response()->json([
             'today' => [
@@ -83,6 +103,11 @@ class ReportingController extends Controller
             ] : null,
             'history' => $history,
             'recent' => $recent,
+            'recent_channel' => $channel,
+            'channel_breakdown' => [
+                Roll::CHANNEL_ONLINE => $channelBreakdown[Roll::CHANNEL_ONLINE] ?? ['rolls' => 0, 'winners' => 0, 'payout' => 0, 'payout_formatted' => Money::format(0, $symbol)],
+                Roll::CHANNEL_POS => $channelBreakdown[Roll::CHANNEL_POS] ?? ['rolls' => 0, 'winners' => 0, 'payout' => 0, 'payout_formatted' => Money::format(0, $symbol)],
+            ],
             'privacy_requests' => PrivacyRequest::where('shop_id', $shop->id)->orderByDesc('id')->limit(50)->get()
                 ->map(fn (PrivacyRequest $p) => [
                     'topic' => $p->topic,

@@ -36,23 +36,35 @@ class RollService
         $isTest = PreviewLinks::isValid($settings, $input->previewToken);
         $window = new PromoWindow($settings, $shop->timezone);
         $promoDate = $window->promoDate();
-        $emailHash = EmailHasher::hash($input->email);
+        $emailHash = $input->email !== null && $input->email !== '' ? IdentityHasher::hashEmail($input->email) : null;
+        $phoneHash = $input->phone !== null && $input->phone !== '' ? IdentityHasher::hashPhone($input->phone) : null;
+
+        if ($input->phone && ! $phoneHash) {
+            throw new RollRejected(RollRejected::CURRENCY, 'That phone number does not look right. Please check and try again.');
+        }
+        if (! $emailHash && ! $phoneHash) {
+            throw new RollRejected(RollRejected::CURRENCY, 'Enter an email or phone number to roll.');
+        }
 
         if (! $isTest) {
-            $existing = $this->existingRoll($shop, $emailHash, $promoDate);
+            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $promoDate);
             if ($existing) {
                 return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $existing), repeat: true);
             }
 
             $this->assertOpen($settings, $window);
-            $this->throttle($shop, $input->ip, $promoDate);
+            if ($input->channel === Roll::CHANNEL_ONLINE) {
+                $this->throttle($shop, $input->ip, $promoDate);
+            }
         }
 
         if ($input->currency && strtoupper($input->currency) !== strtoupper($shop->currency)) {
             throw new RollRejected(RollRejected::CURRENCY, 'This promotion is only available in the store currency.');
         }
 
-        $priced = $this->pricer->price($shop, $settings, $input->lines);
+        $priced = $input->channel === Roll::CHANNEL_POS
+            ? PricedCart::fromPos((int) $input->posSubtotalCents)
+            : $this->pricer->price($shop, $settings, $input->lines);
 
         if ($priced->qualifyingSubtotal() < (int) $settings->min_order) {
             throw new RollRejected(RollRejected::BELOW_MIN, WidgetCopy::spendToRoll($shop, $settings).'.');
@@ -63,11 +75,10 @@ class RollService
 
         try {
             $roll = DB::transaction(fn () => $this->allocateAndRecord(
-                $shop, $settings, $input, $priced, $emailHash, $promoDate, $isTest, $window,
+                $shop, $settings, $input, $priced, $emailHash, $phoneHash, $promoDate, $isTest, $window,
             ));
         } catch (UniqueConstraintViolationException) {
-            // A concurrent request for the same email won the race; show its result.
-            $roll = $this->existingRoll($shop, $emailHash, $promoDate);
+            $roll = $this->existingRoll($shop, $emailHash, $phoneHash, $promoDate);
             if (! $roll) {
                 throw new RollRejected(RollRejected::CLOSED, 'Please try again.', 409);
             }
@@ -83,7 +94,8 @@ class RollService
         ShopSettings $settings,
         RollInput $input,
         PricedCart $priced,
-        string $emailHash,
+        ?string $emailHash,
+        ?string $phoneHash,
         string $promoDate,
         bool $isTest,
         PromoWindow $window,
@@ -96,7 +108,7 @@ class RollService
         if ($isTest) {
             $won = $locked->preview_outcome === 'win';
         } else {
-            $existing = $this->existingRoll($shop, $emailHash, $promoDate);
+            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $promoDate);
             if ($existing) {
                 return $existing;
             }
@@ -118,12 +130,15 @@ class RollService
             : 0;
         $won = $won && $payout > 0;
 
+        $isPos = $input->channel === Roll::CHANNEL_POS;
         $roll = Roll::create([
             'shop_id' => $shop->id,
             'block_id' => $allocation?->blockId,
             'position' => $allocation?->position,
             'terms_version_id' => TermsVersion::where('shop_id', $shop->id)->max('id'),
             'email_hash' => $emailHash,
+            'phone_hash' => $phoneHash,
+            'channel' => $input->channel,
             'ip' => $input->ip,
             'cart_token' => $input->cartToken ? substr($input->cartToken, 0, 255) : null,
             'promo_date' => $promoDate,
@@ -134,7 +149,8 @@ class RollService
             'displayed_number' => $won ? $input->pickedNumber : self::losingFace($input->pickedNumber),
             'won' => $won,
             'payout' => $payout,
-            'code_status' => $won ? Roll::CODE_PENDING : Roll::CODE_NONE,
+            // POS wins are applied directly to the till invoice, so no Shopify code is ever created.
+            'code_status' => $won && ! $isPos ? Roll::CODE_PENDING : Roll::CODE_NONE,
             'is_test' => $isTest,
         ]);
 
@@ -143,7 +159,7 @@ class RollService
 
     private function ensureCode(Shop $shop, ShopSettings $settings, Roll $roll): Roll
     {
-        if (! $roll->won || $roll->code_status === Roll::CODE_CREATED) {
+        if (! $roll->won || $roll->code_status === Roll::CODE_CREATED || $roll->channel === Roll::CHANNEL_POS) {
             return $roll;
         }
 
@@ -161,7 +177,8 @@ class RollService
      */
     private function present(Shop $shop, ShopSettings $settings, Roll $roll, bool $repeat): array
     {
-        $codeReady = ! $roll->won || $roll->code_status === Roll::CODE_CREATED;
+        $isPos = $roll->channel === Roll::CHANNEL_POS;
+        $codeReady = ! $roll->won || $roll->code_status === Roll::CODE_CREATED || $isPos;
 
         return [
             'repeat' => $repeat,
@@ -171,21 +188,34 @@ class RollService
             'picked_number' => $roll->picked_number,
             'payout' => $roll->payout,
             'payout_formatted' => Money::format($roll->payout, Money::symbolFor($shop->currency)),
-            'code' => $roll->won && $codeReady ? $roll->discount_code : null,
+            'code' => $roll->won && $codeReady && ! $isPos ? $roll->discount_code : null,
             'code_ready' => $codeReady,
-            'ends_at' => $roll->discount_ends_at?->toIso8601String(),
+            'ends_at' => ! $isPos ? $roll->discount_ends_at?->toIso8601String() : null,
             'message' => $codeReady
                 ? WidgetCopy::resultMessage($shop, $settings, $roll)
                 : 'You won! We could not create your code just now. Roll again with the same email in a moment to collect it.',
+            'roll_id' => $roll->id,
+            'channel' => $roll->channel,
         ];
     }
 
-    private function existingRoll(Shop $shop, string $emailHash, string $promoDate): ?Roll
+    private function existingRoll(Shop $shop, ?string $emailHash, ?string $phoneHash, string $promoDate): ?Roll
     {
+        if (! $emailHash && ! $phoneHash) {
+            return null;
+        }
+
         return Roll::where('shop_id', $shop->id)
-            ->where('email_hash', $emailHash)
             ->whereDate('promo_date', $promoDate)
             ->where('is_test', false)
+            ->where(function ($q) use ($emailHash, $phoneHash) {
+                if ($emailHash) {
+                    $q->orWhere('email_hash', $emailHash);
+                }
+                if ($phoneHash) {
+                    $q->orWhere('phone_hash', $phoneHash);
+                }
+            })
             ->first();
     }
 

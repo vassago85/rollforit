@@ -19,6 +19,9 @@ final class WidgetCopy
 
     public const DEFAULT_LOSE = 'Not this time. Thanks for rolling, and good luck next time!';
 
+    /** POS wins never produce a Shopify code; the till applies the win straight to the invoice. */
+    public const DEFAULT_POS_WIN = 'You won {payout} off this sale! The discount is on your invoice.';
+
     public static function oddsStatement(ShopSettings $settings): string
     {
         $n = (int) $settings->odds_n;
@@ -68,9 +71,12 @@ final class WidgetCopy
 
     public static function resultMessage(Shop $shop, ShopSettings $settings, Roll $roll): string
     {
-        $template = $roll->won
-            ? ($settings->win_message ?: self::DEFAULT_WIN)
-            : ($settings->lose_message ?: self::DEFAULT_LOSE);
+        $isPos = $roll->channel === Roll::CHANNEL_POS;
+        $template = match (true) {
+            $roll->won && $isPos => self::DEFAULT_POS_WIN,
+            $roll->won => $settings->win_message ?: self::DEFAULT_WIN,
+            default => $settings->lose_message ?: self::DEFAULT_LOSE,
+        };
 
         return strtr($template, [
             '{payout}' => Money::format($roll->payout, Money::symbolFor($shop->currency)),

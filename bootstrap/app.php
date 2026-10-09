@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EmbeddedAppHeaders;
 use App\Http\Middleware\VerifyAppProxy;
+use App\Http\Middleware\VerifyPosRequest;
 use App\Http\Middleware\VerifySessionToken;
 use App\Http\Middleware\VerifyWebhookHmac;
 use Illuminate\Foundation\Application;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'shopify.session' => VerifySessionToken::class,
             'shopify.proxy' => VerifyAppProxy::class,
+            'shopify.pos' => VerifyPosRequest::class,
             'shopify.webhook' => VerifyWebhookHmac::class,
             'shopify.embedded' => EmbeddedAppHeaders::class,
         ]);

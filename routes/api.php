@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\AdvertController;
 use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\TermsController;
+use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProxyController;
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
@@ -12,6 +13,8 @@ Route::middleware('shopify.session')->prefix('admin')->name('api.admin.')->group
     Route::get('settings', [SettingsController::class, 'show'])->name('settings.show');
     Route::put('settings', [SettingsController::class, 'update'])->name('settings.update');
     Route::post('settings/preview', [SettingsController::class, 'preview'])->name('settings.preview');
+    Route::post('settings/pos-secret', [SettingsController::class, 'rotatePosSecret'])->name('settings.pos.rotate');
+    Route::delete('settings/pos-secret', [SettingsController::class, 'disablePos'])->name('settings.pos.disable');
 
     Route::get('terms', [TermsController::class, 'show'])->name('terms.show');
     Route::put('terms', [TermsController::class, 'update'])->name('terms.update');
@@ -32,6 +35,11 @@ Route::middleware('shopify.session')->prefix('admin')->name('api.admin.')->group
 Route::prefix('proxy')->name('proxy.')->group(function () {
     Route::get('status', [ProxyController::class, 'status'])->middleware('shopify.proxy')->name('status');
     Route::post('roll', [ProxyController::class, 'roll'])->middleware('shopify.proxy:once')->name('roll');
+});
+
+Route::prefix('pos')->middleware('shopify.pos')->name('pos.')->group(function () {
+    Route::post('status', [PosController::class, 'status'])->name('status');
+    Route::post('roll', [PosController::class, 'roll'])->name('roll');
 });
 
 Route::post('webhooks', [WebhookController::class, 'handle'])->middleware('shopify.webhook')->name('webhooks');

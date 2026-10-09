@@ -117,6 +117,32 @@
         </s-stack>
     </s-section>
 
+    <s-section heading="Point of sale (in-store)">
+        <s-stack gap="base">
+            <s-paragraph>Let staff offer a roll on the till. HuntexPos verifies the roll with Roll for It before any money changes hands; winnings come off the invoice directly.</s-paragraph>
+            <s-stack direction="inline" gap="base" alignItems="center">
+                <s-switch id="pos_enabled" data-field="pos_enabled" label="POS integration enabled"></s-switch>
+                <s-badge id="pos-badge" tone="neutral">Not configured</s-badge>
+            </s-stack>
+            <s-stack direction="inline" gap="small">
+                <s-button id="pos-rotate">Generate POS secret</s-button>
+                <s-button id="pos-disable" variant="tertiary" hidden>Disable and clear secret</s-button>
+            </s-stack>
+            <s-banner id="pos-secret-banner" tone="success" heading="Copy this secret into HuntexPos now" hidden>
+                <s-stack gap="small-200">
+                    <s-paragraph>You'll only see it this one time. If you lose it, generate a new one — the old secret stops working the moment a new one is created.</s-paragraph>
+                    <s-text id="pos-secret-value" font-weight="bold"></s-text>
+                    <s-stack direction="inline" gap="small">
+                        <s-button id="pos-secret-copy" variant="primary">Copy</s-button>
+                        <s-button id="pos-secret-done" variant="tertiary">I've saved it</s-button>
+                    </s-stack>
+                    <s-paragraph>In HuntexPos appsettings:</s-paragraph>
+                    <s-text id="pos-env-example" font-family="monospace"></s-text>
+                </s-stack>
+            </s-banner>
+        </s-stack>
+    </s-section>
+
     <s-section heading="Test mode">
         <s-stack gap="base">
             <s-paragraph>Create a private link that lets you roll on your storefront even when the promotion is off. Test rolls force the outcome you choose, don't count towards limits or reports, and winning codes expire after an hour. The link works for 2 hours.</s-paragraph>
@@ -145,7 +171,7 @@
   const TEXT = ['start_time', 'end_time', 'min_order', 'max_payout', 'daily_budget', 'max_winners_per_day', 'odds_n',
     'headline', 'win_message', 'lose_message', 'die_color', 'die_number_color', 'accent_color', 'roll_duration_ms',
     'drawer_selector', 'promoter_name', 'promoter_registration_number', 'promoter_address', 'promoter_email', 'promoter_phone'];
-  const BOOLS = ['enabled', 'sound_enabled', 'celebration_enabled', 'show_countdown'];
+  const BOOLS = ['enabled', 'sound_enabled', 'celebration_enabled', 'show_countdown', 'pos_enabled'];
   let state = null;
   let collections = [];
   let previewUrl = null;
@@ -164,6 +190,8 @@
     collections = f.excluded_collections || [];
     renderCollections();
 
+    renderPos(data);
+
     el('timezone-note').textContent = 'Times are in your store timezone: ' + data.shop.timezone + '.';
     el('enabled').disabled = !data.status.can_enable && !f.enabled;
     el('open-badge').textContent = data.status.open_now ? 'Running now' : 'Not running now';
@@ -181,6 +209,18 @@
   function list(id, items) {
     el(id).hidden = !items.length;
     el(id + '-list').innerHTML = items.map((i) => '<s-list-item>' + esc(i) + '</s-list-item>').join('');
+  }
+
+  function renderPos(data) {
+    const f = data.form;
+    const configured = !!f.pos_secret_last_four;
+    el('pos-badge').textContent = configured
+      ? (f.pos_enabled ? 'Active · ending ' + f.pos_secret_last_four : 'Paused · ending ' + f.pos_secret_last_four)
+      : 'Not configured';
+    el('pos-badge').tone = configured && f.pos_enabled ? 'success' : 'neutral';
+    el('pos-rotate').textContent = configured ? 'Rotate POS secret' : 'Generate POS secret';
+    el('pos-disable').hidden = !configured;
+    el('pos_enabled').disabled = !configured;
   }
 
   function renderCollections() {
@@ -278,6 +318,50 @@
     }
   });
   el('clear-collections').addEventListener('click', () => { collections = []; renderCollections(); });
+  let lastPosSecret = null;
+
+  async function rotatePos() {
+    el('pos-rotate').loading = true;
+    try {
+      const data = await api('POST', 'settings/pos-secret');
+      lastPosSecret = data.secret;
+      el('pos-secret-value').textContent = data.secret;
+      el('pos-env-example').textContent =
+        'RollForIt__BaseUrl=' + data.base_url + '\n' +
+        'RollForIt__ShopDomain=' + data.shop_domain + '\n' +
+        'RollForIt__PosSecret=' + data.secret;
+      el('pos-secret-banner').hidden = false;
+      await load();
+      toast('POS secret generated. Copy it now.');
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      el('pos-rotate').loading = false;
+    }
+  }
+
+  async function disablePos() {
+    if (!window.confirm('Disable POS integration and clear the secret? HuntexPos will stop being able to call Roll for It until you generate a new secret.')) {
+      return;
+    }
+    el('pos-disable').loading = true;
+    try {
+      await api('DELETE', 'settings/pos-secret');
+      el('pos-secret-banner').hidden = true;
+      await load();
+      toast('POS integration disabled');
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      el('pos-disable').loading = false;
+    }
+  }
+
+  el('pos-rotate').addEventListener('click', rotatePos);
+  el('pos-disable').addEventListener('click', disablePos);
+  el('pos-secret-copy').addEventListener('click', () => lastPosSecret && copy(lastPosSecret));
+  el('pos-secret-done').addEventListener('click', () => { lastPosSecret = null; el('pos-secret-banner').hidden = true; });
+
   el('preview-win').addEventListener('click', () => preview('win'));
   el('preview-loss').addEventListener('click', () => preview('loss'));
   el('preview-open').addEventListener('click', () => previewUrl && window.open(previewUrl, '_blank'));

@@ -67,9 +67,18 @@
     </s-section>
 
     <s-section heading="Rolls today">
+        <s-stack gap="base">
+            <s-stack direction="inline" gap="small" alignItems="center">
+                <s-text color="subdued">Filter:</s-text>
+                <s-button id="chan-all" variant="primary">All</s-button>
+                <s-button id="chan-online" variant="tertiary">Online</s-button>
+                <s-button id="chan-pos" variant="tertiary">POS</s-button>
+                <s-text id="chan-summary" color="subdued"></s-text>
+            </s-stack>
         <s-table>
             <s-table-header-row>
                 <s-table-header>Time</s-table-header>
+                <s-table-header>Channel</s-table-header>
                 <s-table-header>Cart</s-table-header>
                 <s-table-header>Picked</s-table-header>
                 <s-table-header>Shown</s-table-header>
@@ -78,6 +87,7 @@
             </s-table-header-row>
             <s-table-body id="recent"></s-table-body>
         </s-table>
+        </s-stack>
     </s-section>
 
     <s-section heading="History">
@@ -136,11 +146,21 @@
     }
 
     el('recent').innerHTML = d.recent.length ? d.recent.map((r) => row([
-      esc(r.time), esc(r.cart_formatted), r.picked, r.displayed,
+      esc(r.time),
+      '<s-badge tone="' + (r.channel === 'pos' ? 'info' : 'neutral') + '">' + (r.channel === 'pos' ? 'In-store' : 'Online') + '</s-badge>',
+      esc(r.cart_formatted), r.picked, r.displayed,
       (r.won ? '<s-badge tone="success">Won ' + esc(r.payout_formatted) + '</s-badge>' : '<s-badge>Lost</s-badge>')
         + (r.test ? ' <s-badge tone="info">Test</s-badge>' : ''),
-      esc(r.code || '') + (r.won && r.code_status !== 'created' ? ' <s-badge tone="critical">' + esc(r.code_status) + '</s-badge>' : ''),
-    ])).join('') : empty(6, 'No rolls yet today');
+      esc(r.code || '') + (r.won && r.code_status !== 'created' && r.channel !== 'pos' ? ' <s-badge tone="critical">' + esc(r.code_status) + '</s-badge>' : (r.channel === 'pos' ? '<s-text color="subdued">(applied in-store)</s-text>' : '')),
+    ])).join('') : empty(7, 'No rolls yet today');
+
+    const cb = d.channel_breakdown;
+    el('chan-summary').textContent =
+      'Online: ' + cb.online.rolls + ' rolls · ' + cb.online.winners + ' winners · ' + cb.online.payout_formatted + '. ' +
+      'POS: ' + cb.pos.rolls + ' rolls · ' + cb.pos.winners + ' winners · ' + cb.pos.payout_formatted + '.';
+    ['all', 'online', 'pos'].forEach((c) => {
+      el('chan-' + c).variant = ((d.recent_channel || 'all') === c) ? 'primary' : 'tertiary';
+    });
 
     el('history').innerHTML = d.history.length ? d.history.map((h) => row([
       esc(h.promo_date), h.rolls, h.winners, esc(h.payout_formatted),
@@ -195,11 +215,14 @@
     return s ? '?' + s : '';
   }
 
+  let activeChannel = 'all';
+
   async function load(fresh) {
     el('error').hidden = true;
     try {
+      const reportQuery = activeChannel === 'all' ? '' : '?channel=' + activeChannel;
       const [report, metrics] = await Promise.all([
-        api('GET', 'reporting'),
+        api('GET', 'reporting' + reportQuery),
         api('GET', 'reporting/metrics' + rangeQuery(fresh ? { fresh: 1 } : null)),
       ]);
       renderReport(report);
@@ -210,6 +233,9 @@
     }
   }
 
+  ['all', 'online', 'pos'].forEach((c) => el('chan-' + c).addEventListener('click', () => {
+    activeChannel = c; load(false);
+  }));
   el('refresh').addEventListener('click', () => load(false));
   el('tm-refresh').addEventListener('click', () => load(true));
   el('apply-range').addEventListener('click', () => load(false));
