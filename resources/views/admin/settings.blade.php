@@ -66,7 +66,7 @@
             <s-stack direction="inline" gap="base">
                 <s-select id="odds_mode" data-field="odds_mode" label="Odds mode">
                     <s-option value="guaranteed">Guaranteed: one winner in every N rolls</s-option>
-                    <s-option value="chance">Chance: every roll has a 1 in N chance</s-option>
+                    <s-option value="chance">Random: every roll has a 1 in N chance</s-option>
                 </s-select>
                 <s-number-field id="odds_n" data-field="odds_n" label="N" min="2" max="1000" step="1"></s-number-field>
             </s-stack>
