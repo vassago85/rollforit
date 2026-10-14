@@ -1,34 +1,69 @@
 @extends('layouts.admin', ['title' => 'Roll4It: Test lab'])
 
 @push('scripts')
-<link rel="stylesheet" href="{{ asset('demo/assets/rfi-widget.css') }}">
 <style>
-    .rfi-lab { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.5fr); gap: 20px; align-items: start; }
+    .rfi-lab { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(340px, 1.6fr); gap: 20px; align-items: start; }
     @media (max-width: 760px) { .rfi-lab { grid-template-columns: 1fr; } }
-    .rfi-lab-card { border: 1px solid #e3e3e3; border-radius: 10px; padding: 16px; background: #fff; }
-    .rfi-lab-preview { min-height: 360px; display: flex; align-items: center; justify-content: center; }
-    .rfi-lab-preview .rfi-root { width: 100%; margin: 0; }
     .rfi-lab-diag { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-top: 10px; font-size: 0.9em; }
     .rfi-lab-diag dt { color: #475569; }
     .rfi-lab-diag dd { margin: 0; font-weight: 600; }
     .rfi-lab-diag dd.hit { color: #0b6b3b; }
     .rfi-lab-note { margin: 0 0 12px; font-size: 0.9em; color: #475569; }
-    .rfi-lab-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #e0e7ff; color: #1e3a8a; font-size: 0.75em; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
-    .rfi-lab-empty { color: #64748b; font-style: italic; text-align: center; padding: 60px 20px; }
+
+    .rfi-casino {
+        --rfi-chase: 1.2s;
+        position: relative; padding: 30px 22px 24px; border-radius: 26px;
+        background: radial-gradient(ellipse at 50% 30%, #1f7a4a 0%, #14532d 55%, #0a2e1a 100%);
+        box-shadow: inset 0 0 0 10px #3b1d0e, inset 0 0 0 12px #a16207, inset 0 0 70px rgba(0, 0, 0, 0.55), 0 14px 34px rgba(15, 23, 42, 0.25);
+        transition: box-shadow 0.3s ease;
+    }
+    .rfi-casino.is-rolling { --rfi-chase: 0.36s; }
+    .rfi-casino.is-won { --rfi-chase: 0.18s; animation: rfi-jackpot 0.5s ease-in-out 6 alternate; }
+    .rfi-casino.is-lost { --rfi-chase: 2.4s; }
+    @keyframes rfi-jackpot {
+        to { box-shadow: inset 0 0 0 10px #3b1d0e, inset 0 0 0 12px #facc15, inset 0 0 90px rgba(250, 204, 21, 0.35), 0 0 40px 6px rgba(250, 204, 21, 0.55); }
+    }
+    .rfi-bulb {
+        position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%;
+        background: #92400e; animation: rfi-bulb var(--rfi-chase) steps(1) infinite;
+    }
+    .rfi-bulb:nth-child(odd) { animation-delay: calc(var(--rfi-chase) / -2); }
+    @keyframes rfi-bulb {
+        0% { background: #fde68a; box-shadow: 0 0 8px 2px rgba(253, 224, 71, 0.85); }
+        50% { background: #92400e; box-shadow: none; }
+    }
+    .rfi-casino-sign {
+        margin: 0 0 14px; text-align: center; font-weight: 800; font-size: 0.85em; letter-spacing: 0.22em; text-transform: uppercase;
+        color: #fef3c7; text-shadow: 0 0 6px #f59e0b, 0 0 16px #f59e0b;
+    }
+    .rfi-casino.is-won .rfi-casino-sign { color: #fff; font-size: 1em; text-shadow: 0 0 8px #facc15, 0 0 22px #facc15, 0 0 34px #f97316; }
+    .rfi-casino.is-lost .rfi-casino-sign { color: #e5e7eb; text-shadow: 0 0 6px rgba(148, 163, 184, 0.8); }
+    .rfi-casino-frame { display: block; width: 100%; height: 560px; border: 0; background: transparent; }
+    .rfi-casino-empty { color: #d1fae5; text-align: center; padding: 80px 20px; font-style: italic; }
+    .rfi-casino-foot { margin: 12px 0 0; text-align: center; color: #bbf7d0; font-size: 0.8em; }
+
+    .rfi-tally { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; }
+    .rfi-tally b { display: block; font-size: 1.35em; font-variant-numeric: tabular-nums; }
+    .rfi-tally small { color: #475569; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    @media (prefers-reduced-motion: reduce) {
+        .rfi-bulb, .rfi-casino.is-won { animation: none; }
+        .rfi-bulb:nth-child(odd) { background: #fde68a; }
+    }
 </style>
 @endpush
 
 @section('content')
 <s-page heading="Test lab">
     <s-banner tone="info" heading="This is a sandbox">
-        <s-paragraph>Nothing you do here reaches a real customer. No discount codes are created, no entries are recorded, your daily budget is untouched, and the generated code starts with <b>SIM-</b> so it can never be mistaken for a real one. Use it to see exactly what a customer sees, double-check your caps, and sanity-check the result copy.</s-paragraph>
+        <s-paragraph>The table plays the real storefront widget: the 3D die, the sound, confetti on a win, the countdown to the next roll, the streak badge and the "could have won" teaser. Nothing reaches a real customer. No discount codes are created, no entries are recorded, your daily budget is untouched, and every code starts with <b>SIM-</b>.</s-paragraph>
     </s-banner>
 
     <s-banner id="lab-blockers" tone="warning" heading="Finish setup before testing" hidden>
         <s-unordered-list id="lab-blockers-list"></s-unordered-list>
     </s-banner>
 
-    <s-section heading="Controls">
+    <s-section heading="Test table">
         <div class="rfi-lab">
             <div>
                 <s-stack gap="base">
@@ -42,9 +77,25 @@
                         <s-option value="online" selected>Online storefront</s-option>
                         <s-option value="pos">Point of sale (POS)</s-option>
                     </s-select>
-                    <s-number-field id="lab-picked" label="Picked number" min="1" max="10" step="1" details="The number the customer chooses on the die face. It never changes the outcome."></s-number-field>
-                    <s-button id="lab-run" variant="primary">Run the roll</s-button>
+                    <s-select id="lab-customer" label="Customer">
+                        <s-option value="guest" selected>Guest (enters an email)</s-option>
+                        <s-option value="signed_in">Signed in to their account</s-option>
+                    </s-select>
+                    <s-number-field id="lab-streak" label="Streak" min="1" max="60" step="1" value="3" details="Promo days in a row this customer has rolled, counting this roll. Two or more shows the streak badge."></s-number-field>
+                    <s-button id="lab-deal" variant="primary">New roll</s-button>
                 </s-stack>
+
+                <s-box padding="base" background="subdued" borderRadius="base" style="margin-top:16px">
+                    <s-stack gap="small-200">
+                        <s-text font-weight="bold">This session</s-text>
+                        <div class="rfi-tally">
+                            <div><b id="lab-tally-rolls">0</b><small>Rolls</small></div>
+                            <div><b id="lab-tally-wins">0</b><small>Wins</small></div>
+                            <div><b id="lab-tally-rate">-</b><small>Win rate</small></div>
+                            <div><b id="lab-tally-paid">-</b><small>Paid out</small></div>
+                        </div>
+                    </s-stack>
+                </s-box>
 
                 <s-box padding="base" background="subdued" borderRadius="base" style="margin-top:16px">
                     <s-stack gap="small-200">
@@ -59,16 +110,18 @@
                 </s-box>
             </div>
 
-            <div class="rfi-lab-card rfi-lab-preview">
-                <div class="rfi-lab-empty" id="lab-empty">Run a roll to see what the customer sees.</div>
-                <div class="rfi-root" id="lab-widget" hidden></div>
+            <div class="rfi-casino" id="lab-casino">
+                <p class="rfi-casino-sign" id="lab-sign">Roll4It · Test table</p>
+                <div class="rfi-casino-empty" id="lab-empty">Shuffling the table…</div>
+                <iframe class="rfi-casino-frame" id="lab-frame" title="Roll4It as your customers see it" hidden></iframe>
+                <p class="rfi-casino-foot" id="lab-foot" hidden></p>
             </div>
         </div>
     </s-section>
 
     <s-section heading="Diagnostics" id="lab-diag-section" hidden>
         <s-stack gap="base">
-            <p class="rfi-lab-note">What the maths said, step by step, for the roll you just simulated.</p>
+            <p class="rfi-lab-note">What the maths said, step by step, for the roll you just played.</p>
             <dl class="rfi-lab-diag" id="lab-diag"></dl>
         </s-stack>
     </s-section>
@@ -78,11 +131,33 @@
 @push('scripts')
 <script>
 (() => {
-  const { api, el, esc, centsToMoney, toast, showErrors } = RFI;
+  const { api, el, esc, centsToMoney, moneyToCents, toast } = RFI;
+  const frame = el('lab-frame');
+  const casino = el('lab-casino');
+  const tally = { rolls: 0, wins: 0, paid: 0 };
   let state = null;
+  let rolling = false;
+  let landing = null;
 
-  function setCapsFromState() {
-    if (!state) return;
+  function hangLights() {
+    const spots = [];
+    for (let i = 0; i < 16; i++) spots.push([8 + i * 84 / 15 + '%', '5px']);
+    for (let i = 0; i < 9; i++) spots.push(['calc(100% - 5px)', 10 + i * 80 / 8 + '%']);
+    for (let i = 15; i >= 0; i--) spots.push([8 + i * 84 / 15 + '%', 'calc(100% - 5px)']);
+    for (let i = 8; i >= 0; i--) spots.push(['5px', 10 + i * 80 / 8 + '%']);
+    const lights = document.createElement('div');
+    lights.setAttribute('aria-hidden', 'true');
+    lights.innerHTML = spots.map(([left, top]) => '<span class="rfi-bulb" style="left:' + left + ';top:' + top + '"></span>').join('');
+    casino.prepend(lights);
+  }
+
+  function setTable(mode, sign) {
+    casino.classList.remove('is-rolling', 'is-won', 'is-lost');
+    if (mode) casino.classList.add('is-' + mode);
+    el('lab-sign').textContent = sign;
+  }
+
+  function setCaps() {
     const s = state.settings;
     const sym = state.shop.symbol;
     el('lab-cap-min').textContent = s.min_order ? centsToMoney(s.min_order, sym) : 'not set';
@@ -92,63 +167,29 @@
     if (s.min_order && !el('lab-cart').value) {
       el('lab-cart').value = String(Math.round(s.min_order * 1.2) / 100);
     }
-    if (!el('lab-picked').value) el('lab-picked').value = '7';
   }
 
   function renderBlockers(list) {
-    const banner = el('lab-blockers');
-    const target = el('lab-blockers-list');
-    if (!list || !list.length) { banner.hidden = true; return; }
-    banner.hidden = false;
-    target.innerHTML = list.map((i) => '<s-list-item>' + esc(i) + '</s-list-item>').join('');
-    el('lab-run').disabled = true;
+    if (!list || !list.length) return false;
+    el('lab-blockers').hidden = false;
+    el('lab-blockers-list').innerHTML = list.map((i) => '<s-list-item>' + esc(i) + '</s-list-item>').join('');
+    el('lab-deal').disabled = true;
+    el('lab-empty').textContent = 'The table opens once setup is finished.';
+    return true;
   }
 
-  async function load() {
-    try {
-      state = await api('GET', 'simulator');
-      setCapsFromState();
-      renderBlockers(state.blockers);
-    } catch (e) {
-      toast(e.message, true);
-    }
+  function renderTally() {
+    el('lab-tally-rolls').textContent = tally.rolls;
+    el('lab-tally-wins').textContent = tally.wins;
+    el('lab-tally-rate').textContent = tally.rolls ? Math.round(tally.wins / tally.rolls * 100) + '%' : '-';
+    el('lab-tally-paid').textContent = tally.rolls ? centsToMoney(tally.paid, state.shop.symbol) : '-';
   }
 
-  const CSS_SPAN = (n) => '<span>' + esc(n) + '</span>';
-
-  function dieHtml(number, settled) {
-    const cls = 'rfi-cssdie' + (settled ? ' rfi-cssdie--landed' : ' rfi-cssdie--rolling');
-    return '<div class="' + cls + '" style="--rfi-die:#1f2937;--rfi-num:#fff">' + CSS_SPAN(settled ? number : '?') + '</div>';
-  }
-
-  function renderResult(result) {
-    const host = el('lab-widget');
-    el('lab-empty').hidden = true;
-    host.hidden = false;
-    const banner = state.settings.max_payout_percent
-      ? 'Simulated roll <span class="rfi-lab-badge">SIM</span>'
-      : 'Simulated roll <span class="rfi-lab-badge">SIM</span>';
-    const stage = '<div class="rfi-stage">' + dieHtml(result.displayed_number, true) + '</div>';
-    const msgCls = 'rfi-msg rfi-msg--' + (result.won ? 'win' : 'lose');
-    const codeLine = result.code
-      ? '<p class="rfi-note">Simulated code: <b>' + esc(result.code) + '</b> (not a real discount)</p>'
-      : '';
-    host.innerHTML =
-      '<div class="rfi-card" style="--rfi-accent:#f59e0b">'
-      + '<p class="rfi-banner">' + banner + '</p>'
-      + '<h3 class="rfi-title">Roll4It <span class="rfi-test">Test mode</span></h3>'
-      + '<div class="rfi-body">'
-      + stage
-      + '<p class="' + msgCls + '">' + esc(result.message) + '</p>'
-      + codeLine
-      + '</div>'
-      + '</div>';
-  }
-
-  function renderDiagnostics(d) {
-    const section = el('lab-diag-section');
-    section.hidden = false;
+  function renderDiagnostics(d, result) {
+    el('lab-diag-section').hidden = false;
     const rows = [
+      ['Picked number', esc(result.picked_number), ''],
+      ['Die landed on', esc(result.displayed_number), ''],
       ['Cart subtotal', esc(d.cart_subtotal_formatted), ''],
       ['Minimum order', esc(d.min_order_formatted), ''],
       ['Max payout cap', esc(d.max_payout_formatted), d.binding_cap === 'max_payout' ? 'hit' : ''],
@@ -163,30 +204,95 @@
     ).join('');
   }
 
-  async function run() {
-    showErrors({});
-    el('lab-run').loading = true;
-    try {
-      const body = {
-        cart_value: el('lab-cart').value,
-        outcome: el('lab-outcome').value,
-        picked_number: parseInt(el('lab-picked').value, 10) || 7,
-        channel: el('lab-channel').value,
-      };
-      const data = await api('POST', 'simulator/roll', body);
-      renderResult(data.result);
-      renderDiagnostics(data.diagnostics);
-    } catch (e) {
-      if (e.status === 422 && e.errors) { showErrors(e.errors); return; }
-      el('lab-widget').hidden = true;
-      el('lab-empty').hidden = false;
-      el('lab-empty').textContent = e.message || 'Could not run the roll.';
-    } finally {
-      el('lab-run').loading = false;
-    }
+  const send = (msg) => frame.contentWindow && frame.contentWindow.postMessage(Object.assign({ source: 'rfi-lab' }, msg), location.origin);
+  const cartCents = () => moneyToCents(el('lab-cart').value) || 0;
+
+  function frameConfig() {
+    return {
+      status: Object.assign({}, state.widget.status, { logged_in: el('lab-customer').value === 'signed_in' }),
+      cart: cartCents(),
+      streak: parseInt(el('lab-streak').value, 10) || 1,
+      email: 'customer@example.com',
+    };
   }
 
-  el('lab-run').addEventListener('click', run);
+  function deal() {
+    if (rolling || !state || !state.widget) return;
+    landing = null;
+    setTable(null, 'Pick a number · Roll the die');
+    send({ type: 'config', config: frameConfig() });
+  }
+
+  async function onRoll(msg) {
+    rolling = true;
+    el('lab-deal').disabled = true;
+    setTable('rolling', 'No more bets…');
+    let reply;
+    try {
+      const data = await api('POST', 'simulator/roll', {
+        cart_value: el('lab-cart').value,
+        outcome: el('lab-outcome').value,
+        picked_number: msg.picked_number,
+        channel: el('lab-channel').value,
+      });
+      landing = data;
+      reply = { status: 200, body: Object.assign({}, data.result, { test: false }) };
+    } catch (e) {
+      rolling = false;
+      el('lab-deal').disabled = false;
+      setTable(null, 'Pick a number · Roll the die');
+      reply = { status: e.status || 500, body: { message: e.message || 'Could not run the roll.' } };
+    }
+    send({ type: 'rolled', id: msg.id, status: reply.status, body: reply.body });
+  }
+
+  function onLanded() {
+    rolling = false;
+    el('lab-deal').disabled = false;
+    if (!landing) return;
+    const result = landing.result;
+    tally.rolls++;
+    if (result.won) { tally.wins++; tally.paid += result.payout; }
+    renderTally();
+    renderDiagnostics(landing.diagnostics, result);
+    setTable(result.won ? 'won' : 'lost', result.won ? 'Winner! ' + result.payout_formatted + ' off' : 'The house wins this one');
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.source !== frame.contentWindow || e.origin !== location.origin) return;
+    const msg = e.data || {};
+    if (msg.source !== 'rfi-lab-frame') return;
+    if (msg.type === 'hello') deal();
+    else if (msg.type === 'height') frame.style.height = Math.max(320, msg.value) + 'px';
+    else if (msg.type === 'roll') onRoll(msg);
+    else if (msg.type === 'landed') onLanded();
+    else if (msg.type === 'share') toast('On a real win the customer shares: "' + msg.text + '"');
+  });
+
+  async function load() {
+    try {
+      state = await api('GET', 'simulator');
+    } catch (e) {
+      el('lab-empty').textContent = e.message;
+      return;
+    }
+    setCaps();
+    if (renderBlockers(state.blockers) || !state.widget) return;
+    if (state.widget.example_social_proof) {
+      el('lab-foot').hidden = false;
+      el('lab-foot').textContent = 'The "given away today" line uses example numbers until someone wins for real today.';
+    }
+    el('lab-empty').hidden = true;
+    frame.hidden = false;
+    frame.src = '/admin/lab-frame.html';
+  }
+
+  el('lab-deal').addEventListener('click', deal);
+  el('lab-cart').addEventListener('input', () => send({ type: 'cart', cart: cartCents() }));
+  el('lab-customer').addEventListener('change', deal);
+  el('lab-streak').addEventListener('change', deal);
+
+  hangLights();
   load();
 })();
 </script>

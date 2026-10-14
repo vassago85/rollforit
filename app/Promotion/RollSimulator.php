@@ -73,6 +73,7 @@ final class RollSimulator
 
         $symbol = Money::symbolFor($shop->currency);
         $percentCap = PayoutCalculator::percentCap($cartSubtotalCents, $maxPercent);
+        $potentialPayout = $won ? null : PayoutCalculator::calculate($cartSubtotalCents, $maxPayout, $maxPercent);
 
         return [
             'result' => [
@@ -84,6 +85,10 @@ final class RollSimulator
                 'picked_number' => $pickedNumber,
                 'payout' => $payout,
                 'payout_formatted' => Money::format($payout, $symbol),
+                'potential_payout' => $potentialPayout,
+                'potential_payout_formatted' => $potentialPayout !== null && $potentialPayout > 0
+                    ? Money::format($potentialPayout, $symbol)
+                    : null,
                 'code' => $code,
                 'code_ready' => true,
                 'ends_at' => null,

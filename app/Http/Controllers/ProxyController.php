@@ -10,9 +10,8 @@ use App\Promotion\PreviewLinks;
 use App\Promotion\PromoWindow;
 use App\Promotion\RollInput;
 use App\Promotion\RollService;
-use App\Promotion\WidgetCopy;
+use App\Promotion\WidgetStatus;
 use App\Shopify\Exceptions\ShopifyApiException;
-use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -27,7 +26,6 @@ class ProxyController extends Controller
         $shop = $this->shop($request);
         $settings = $shop->settingsOrCreate();
         $window = new PromoWindow($settings, $shop->timezone);
-        $symbol = Money::symbolFor($shop->currency);
         $test = PreviewLinks::isValid($settings, $request->query('preview'));
 
         $reason = null;
@@ -56,53 +54,16 @@ class ProxyController extends Controller
             return $this->noStore(['open' => false, 'reason' => 'closed']);
         }
 
-        // Social proof: only share once there's at least one real winner today,
-        // so the widget never shows "0 winners".
-        $todayStats = null;
-        if ($stats !== null && $stats->winners > 0) {
-            $todayStats = [
-                'winners' => $stats->winners,
-                'total_payout' => $stats->payout,
-                'total_payout_formatted' => Money::format($stats->payout, $symbol),
-                'message' => WidgetCopy::socialProof($stats->winners, $stats->payout, $symbol),
-            ];
-        }
-
-        return $this->noStore([
-            'open' => $reason === null,
-            'reason' => $reason,
-            'next_roll' => $next ? [
-                'starts_at' => $next->toIso8601String(),
-                'starts_in' => max(0, $next->getTimestamp() - $window->now()->getTimestamp()),
-                'label' => WidgetCopy::nextRollLabel($next, $window->now()),
-            ] : null,
-            'test' => $test,
-            'currency' => $shop->currency,
-            'min_order' => (int) $settings->min_order,
-            'banner' => WidgetCopy::banner($shop, $settings),
-            'headline' => $settings->headline ?: WidgetCopy::DEFAULT_HEADLINE,
-            'odds' => WidgetCopy::oddsStatement($settings),
-            'disclaimer' => WidgetCopy::pickDisclaimer(),
-            'spend_to_roll' => WidgetCopy::spendToRoll($shop, $settings),
-            'one_roll' => 'One roll per customer per day.',
-            'sold_out_message' => 'Today\'s prizes have all been won. Try again next promo day.',
-            'logged_in' => $request->attributes->get('logged_in_customer_id') !== null,
-            'terms_url' => $settings->terms_url,
-            'min_order_formatted' => Money::format($settings->min_order, $symbol),
-            'max_payout_formatted' => Money::format($settings->max_payout, $symbol),
-            'promo_date' => $window->promoDate(),
-            'previous_promo_date' => $window->previousPromoDate(),
-            'today_stats' => $todayStats,
-            'animation' => [
-                'die_color' => $settings->die_color,
-                'number_color' => $settings->die_number_color,
-                'accent_color' => $settings->accent_color,
-                'duration_ms' => (int) $settings->roll_duration_ms,
-                'sound' => (bool) $settings->sound_enabled,
-                'celebration' => (bool) $settings->celebration_enabled,
-            ],
-            'drawer_selector' => $settings->drawer_selector,
-        ]);
+        return $this->noStore(WidgetStatus::payload(
+            shop: $shop,
+            settings: $settings,
+            window: $window,
+            reason: $reason,
+            next: $next,
+            test: $test,
+            loggedIn: $request->attributes->get('logged_in_customer_id') !== null,
+            stats: $stats,
+        ));
     }
 
     public function roll(Request $request, RollService $rolls): JsonResponse

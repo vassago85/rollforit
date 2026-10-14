@@ -5,9 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Roll;
 use App\Models\Shop;
+use App\Models\ShopSettings;
+use App\Promotion\DayStats;
 use App\Promotion\Exceptions\RollRejected;
+use App\Promotion\PromoWindow;
 use App\Promotion\RollSimulator;
 use App\Promotion\SettingsService;
+use App\Promotion\WidgetStatus;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,7 +46,42 @@ class SimulatorController extends Controller
             ],
             'warnings' => SettingsService::warnings($settings, Money::symbolFor($shop->currency)),
             'blockers' => $settings->enableBlockers(),
+            'widget' => $this->widgetStatus($shop, $settings),
         ]);
+    }
+
+    /**
+     * What the storefront widget would receive mid-promo, so the lab plays the real thing.
+     * Social proof falls back to example numbers until someone has actually won today.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function widgetStatus(Shop $shop, ShopSettings $settings): ?array
+    {
+        if (! $settings->min_order || ! $settings->max_payout) {
+            return null;
+        }
+
+        $window = new PromoWindow($settings, $shop->timezone);
+        $stats = DayStats::for($shop->id, $window->promoDate());
+        $exampleStats = $stats->winners === 0;
+        if ($exampleStats) {
+            $stats = new DayStats(rolls: 12, winners: 3, payout: 3 * (int) $settings->max_payout);
+        }
+
+        return [
+            'status' => WidgetStatus::payload(
+                shop: $shop,
+                settings: $settings,
+                window: $window,
+                reason: null,
+                next: $settings->show_countdown ? $window->nextOpening(skipToday: true) : null,
+                test: false,
+                loggedIn: false,
+                stats: $stats,
+            ),
+            'example_social_proof' => $exampleStats,
+        ];
     }
 
     public function roll(Request $request): JsonResponse
