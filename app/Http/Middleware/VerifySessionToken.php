@@ -53,11 +53,28 @@ class VerifySessionToken
 
                 return new JsonResponse(['message' => 'Could not connect to Shopify. Please reload.'], 502);
             }
+        } elseif ($this->shouldRefreshShopInfo($shop)) {
+            try {
+                $this->info->sync($shop);
+            } catch (ShopifyApiException $e) {
+                Log::warning('Shop info refresh failed', ['shop' => $shop->domain, 'error' => $e->getMessage()]);
+            }
         }
 
         $request->attributes->set('shop', $shop);
 
         return $next($request);
+    }
+
+    /**
+     * Re-sync name, timezone, currency and primary domain when the cached
+     * record looks stale. Shopify only sends this on first install today, so
+     * a store that later moves from New York to Pretoria would keep the old
+     * window forever.
+     */
+    private function shouldRefreshShopInfo(Shop $shop): bool
+    {
+        return $shop->updated_at === null || $shop->updated_at->lt(now()->subHour());
     }
 
     private function unauthorized(string $message): JsonResponse
