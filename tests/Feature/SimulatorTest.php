@@ -100,7 +100,8 @@ it('exposes the current caps and warnings via the show endpoint', function () {
     expect($response->json('settings.max_payout_percent'))->toBe(40)
         ->and($response->json('settings.min_order'))->toBe(50000)
         ->and($response->json('settings.max_payout'))->toBe(100000)
-        ->and($response->json('shop.symbol'))->toBe('R');
+        ->and($response->json('shop.symbol'))->toBe('R')
+        ->and($response->json('shop.storefront_url'))->toBe('https://shop.example.co.za');
 });
 
 it('hands the lab the storefront status so it plays the real widget, with example social proof', function () {

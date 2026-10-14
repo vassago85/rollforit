@@ -213,6 +213,7 @@
       cart: cartCents(),
       streak: parseInt(el('lab-streak').value, 10) || 1,
       email: 'customer@example.com',
+      storefront_url: state.shop.storefront_url,
     };
   }
 

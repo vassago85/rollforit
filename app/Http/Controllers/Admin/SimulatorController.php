@@ -34,6 +34,7 @@ class SimulatorController extends Controller
                 'domain' => $shop->domain,
                 'currency' => $shop->currency,
                 'symbol' => Money::symbolFor($shop->currency),
+                'storefront_url' => $shop->storefrontUrl(),
             ],
             'settings' => [
                 'min_order' => $settings->min_order !== null ? (int) $settings->min_order : null,

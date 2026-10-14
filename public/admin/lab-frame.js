@@ -65,8 +65,14 @@
     return realFetch(input, init);
   };
 
-  /* Sharing would post the admin domain to WhatsApp, so show the merchant the message instead. */
-  const share = (text) => post({ type: 'share', text });
+  /* The widget names the site it runs on, which here is the app's domain. Swap in the shop's storefront and show the merchant the message instead of sharing it. */
+  function share(text) {
+    if (config && config.storefront_url) {
+      const store = new URL(config.storefront_url);
+      text = text.split(location.origin).join(store.origin).split(location.hostname).join(store.hostname);
+    }
+    post({ type: 'share', text });
+  }
   try {
     Object.defineProperty(navigator, 'share', {
       configurable: true,
