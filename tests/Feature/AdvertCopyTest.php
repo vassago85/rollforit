@@ -51,6 +51,22 @@ it('matches the spec templates word for word where they are complete', function 
         ->and($blocks['banner']['text'])->toStartWith('Fridays only: spend R500, roll the die, win up to R1,000 off. T&Cs apply.');
 });
 
+it('mentions the basket percentage cap in every advert when it is set', function () {
+    $blocks = collect(adverts(['max_payout_percent' => 50])['blocks'])->keyBy('key');
+
+    foreach ($blocks as $block) {
+        expect($block['error'])->toBeNull()
+            ->and($block['text'])->toContain('up to 50% of your cart (max R1,000)');
+    }
+
+    expect($blocks['short_social']['text'])->toBe(
+        'Roll4It this Friday. Spend R500 or more at McTactical, roll the die at checkout, and win up to 50% of your cart (max R1,000) off your order. '
+        .'One in every 10 rolls wins. One roll per customer per day. T&Cs: https://shop.example.co.za/pages/roll-for-it-terms'
+    )->and($blocks['email']['text'])->toStartWith('Subject: Roll the die this Friday, win up to 50% of your cart (max R1,000) off')
+        ->and($blocks['banner']['text'])->toStartWith('Fridays only: spend R500, roll the die, win up to 50% of your cart (max R1,000) off. T&Cs apply.')
+        ->and($blocks['whatsapp']['text'])->toContain('win up to 50% of your cart (max R1,000) off');
+});
+
 it('shows an error instead of copy when a value is missing', function (array $settings, string $label) {
     foreach (adverts($settings)['blocks'] as $block) {
         expect($block['text'])->toBeNull()->and($block['error'])->toContain($label);
@@ -84,6 +100,7 @@ it('lists what changed since the adverts were acknowledged', function () {
     $shop->settings->forceFill(['max_payout' => 75000, 'odds_mode' => ShopSettings::MODE_CHANCE])->save();
     $changes = collect($service->changesSinceAck($shop, $shop->settings->fresh()))->keyBy('field');
 
-    expect($changes->keys()->all())->toBe(['Maximum payout', 'Odds'])
-        ->and($changes['Maximum payout'])->toMatchArray(['from' => 'R1,000', 'to' => 'R750']);
+    expect($changes->keys()->all())->toBe(['Maximum payout', 'Prize', 'Odds'])
+        ->and($changes['Maximum payout'])->toMatchArray(['from' => 'R1,000', 'to' => 'R750'])
+        ->and($changes['Prize'])->toMatchArray(['from' => 'up to R1,000', 'to' => 'up to R750']);
 });
