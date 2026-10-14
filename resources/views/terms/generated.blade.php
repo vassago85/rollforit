@@ -41,7 +41,11 @@
 
 <h3>5. The prize</h3>
 <ul>
-    <li>A win is a discount of up to {{ $maxPayout }} off your order. The discount equals the value of the qualifying items in your cart when you rolled, up to a maximum of {{ $maxPayout }}.</li>
+    @if($maxPayoutPercent)
+        <li>A win is a discount of up to {{ $maxPayoutPercent }}% of the qualifying items in your cart, capped at {{ $maxPayout }}. The discount is the lesser of these two caps and is never more than the value of the qualifying items when you rolled.</li>
+    @else
+        <li>A win is a discount of up to {{ $maxPayout }} off your order. The discount equals the value of the qualifying items in your cart when you rolled, up to a maximum of {{ $maxPayout }}.</li>
+    @endif
     <li>The prize is a single-use discount code. It is applied to your cart automatically and is valid until 23:59 ({{ $shop->timezone }} time) on the promo day you won.</li>
     <li>The code can be used once, cannot be combined with other discounts and has no cash value.</li>
     <li>The discount never covers shipping and never applies to gift cards.</li>

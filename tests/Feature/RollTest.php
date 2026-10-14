@@ -313,3 +313,19 @@ it('does not call Shopify for discount codes on a loss', function () {
     expect(collect($calls)->pluck('operation')->all())->toBe(['CartPricing']);
     Http::assertSentCount(1);
 });
+
+it('caps a winning payout at max_payout_percent of the eligible subtotal', function () {
+    // 40% cap on a R500 cart = R200, even though max_payout (R1,000) would allow R500.
+    $shop = makeShop(['max_payout_percent' => 40]);
+    forceNextWin($shop);
+    $calls = fakeShopify([1 => ['price' => '500.00']]);
+
+    $result = roll($shop)->assertOk()->json();
+
+    expect($result['won'])->toBeTrue()
+        ->and($result['payout'])->toBe(20000)
+        ->and($result['payout_formatted'])->toBe('R200');
+
+    $create = collect($calls)->firstWhere('operation', 'CreateRollCode')['variables']['basicCodeDiscount'];
+    expect($create['customerGets']['value']['discountAmount']['amount'])->toBe('200.00');
+});

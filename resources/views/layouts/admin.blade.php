@@ -21,6 +21,7 @@
         <s-link href="/terms">Terms</s-link>
         <s-link href="/advert-copy">Advert copy</s-link>
         <s-link href="/reporting">Reporting</s-link>
+        <s-link href="/simulator">Test lab</s-link>
     </s-app-nav>
 
     @yield('content')

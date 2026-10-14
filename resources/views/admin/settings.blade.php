@@ -48,6 +48,7 @@
                 <s-number-field id="max_payout" data-field="max_payout" label="Maximum payout" prefix="R" min="0.01" step="0.01" required details="The most a single win can take off."></s-number-field>
             </s-stack>
             <s-stack direction="inline" gap="base">
+                <s-number-field id="max_payout_percent" data-field="max_payout_percent" label="Max payout % of basket (optional)" suffix="%" min="1" max="100" step="1" details="Prevents 100%-off wins on small carts. Leave blank to only limit by the amount above. The smaller of the two caps always wins."></s-number-field>
                 <s-number-field id="daily_budget" data-field="daily_budget" label="Daily prize budget (optional)" prefix="R" min="0.01" step="0.01" details="Closes the promotion for the day once prizes reach this total."></s-number-field>
                 <s-number-field id="max_winners_per_day" data-field="max_winners_per_day" label="Max winners per day (optional)" min="1" step="1"></s-number-field>
             </s-stack>
@@ -168,7 +169,7 @@
 <script>
 (() => {
   const { api, toast, el, esc, copy, centsToMoney, moneyToCents, showErrors } = RFI;
-  const TEXT = ['start_time', 'end_time', 'min_order', 'max_payout', 'daily_budget', 'max_winners_per_day', 'odds_n',
+  const TEXT = ['start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent', 'daily_budget', 'max_winners_per_day', 'odds_n',
     'headline', 'win_message', 'lose_message', 'die_color', 'die_number_color', 'accent_color', 'roll_duration_ms',
     'drawer_selector', 'promoter_name', 'promoter_registration_number', 'promoter_address', 'promoter_email', 'promoter_phone'];
   const BOOLS = ['enabled', 'sound_enabled', 'celebration_enabled', 'show_countdown', 'pos_enabled'];
@@ -233,12 +234,15 @@
     const symbol = state ? state.shop.symbol : 'R';
     const cart = moneyToCents(el('example_cart').value);
     const max = moneyToCents(el('max_payout').value);
+    const pct = parseInt(el('max_payout_percent').value, 10);
     const n = parseInt(el('odds_n').value, 10);
 
     if (cart && max) {
-      const payout = Math.min(cart, max);
+      const percentCap = pct > 0 ? Math.floor(cart * pct / 100) : Infinity;
+      const payout = Math.min(cart, max, percentCap);
+      const bitBy = pct > 0 && percentCap < max && percentCap <= cart ? ' (capped at ' + pct + '% of the cart)' : '';
       el('example').textContent = 'A ' + centsToMoney(cart, symbol) + ' cart that wins gets ' + centsToMoney(payout, symbol)
-        + ' off and pays ' + centsToMoney(cart - payout, symbol) + '.';
+        + ' off and pays ' + centsToMoney(cart - payout, symbol) + bitBy + '.';
     } else {
       el('example').textContent = 'Enter a maximum payout to see an example.';
     }
@@ -302,7 +306,7 @@
   }
 
   el('save').addEventListener('click', save);
-  ['example_cart', 'max_payout', 'odds_n', 'odds_mode'].forEach((id) => {
+  ['example_cart', 'max_payout', 'max_payout_percent', 'odds_n', 'odds_mode'].forEach((id) => {
     el(id).addEventListener('input', updateLive);
     el(id).addEventListener('change', updateLive);
   });

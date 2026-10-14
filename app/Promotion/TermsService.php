@@ -62,6 +62,7 @@ class TermsService
             'daysText' => self::joinList($days),
             'minOrder' => Money::format($settings->min_order, $symbol),
             'maxPayout' => Money::format($settings->max_payout, $symbol),
+            'maxPayoutPercent' => $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
             'dailyBudget' => $settings->daily_budget ? Money::format($settings->daily_budget, $symbol) : null,
             'oddsStatement' => $settings->isGuaranteed()
                 ? "One in every {$settings->odds_n} entries wins. Entries are grouped in blocks of {$settings->odds_n}, and exactly one entry in each block wins. Blocks carry over from one promo day to the next until they are complete."

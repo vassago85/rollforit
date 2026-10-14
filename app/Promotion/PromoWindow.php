@@ -95,6 +95,29 @@ class PromoWindow
         return CarbonImmutable::parse($date, $this->timezone)->endOfDay();
     }
 
+    /**
+     * The previous promo day's date (looking back up to 7 days), or null if the
+     * shop has no promo days configured. "Previous" means strictly before today
+     * in the shop's timezone, even if today itself is a promo day.
+     */
+    public function previousPromoDate(?CarbonImmutable $at = null): ?string
+    {
+        $at = ($at ?? $this->now())->setTimezone($this->timezone);
+        $days = array_map('intval', $this->settings->promo_days ?? []);
+        if ($days === []) {
+            return null;
+        }
+
+        for ($offset = 1; $offset <= 7; $offset++) {
+            $day = $at->startOfDay()->subDays($offset);
+            if (in_array($day->dayOfWeekIso, $days, true)) {
+                return $day->toDateString();
+            }
+        }
+
+        return null;
+    }
+
     public function timezone(): string
     {
         return $this->timezone;

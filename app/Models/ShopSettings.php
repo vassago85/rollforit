@@ -38,6 +38,7 @@ class ShopSettings extends Model
             'promo_days' => 'array',
             'min_order' => 'integer',
             'max_payout' => 'integer',
+            'max_payout_percent' => 'integer',
             'daily_budget' => 'integer',
             'max_winners_per_day' => 'integer',
             'excluded_collections' => 'array',

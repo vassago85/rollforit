@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdvertController;
 use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\SimulatorController;
 use App\Http\Controllers\Admin\TermsController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\ProxyController;
@@ -30,6 +31,9 @@ Route::middleware('shopify.session')->prefix('admin')->name('api.admin.')->group
     Route::get('reporting/metrics', [ReportingController::class, 'metrics'])->name('reporting.metrics');
     Route::post('reporting/recompute', [ReportingController::class, 'recompute'])->name('reporting.recompute');
     Route::get('reporting/export', [ReportingController::class, 'export'])->name('reporting.export');
+
+    Route::get('simulator', [SimulatorController::class, 'show'])->name('simulator.show');
+    Route::post('simulator/roll', [SimulatorController::class, 'roll'])->name('simulator.roll');
 });
 
 Route::prefix('proxy')->name('proxy.')->group(function () {

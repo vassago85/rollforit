@@ -126,7 +126,12 @@ class RollService
         }
 
         $payout = $won
-            ? PayoutCalculator::calculate($priced->eligibleSubtotal, (int) $locked->max_payout, $budgetRemaining)
+            ? PayoutCalculator::calculate(
+                $priced->eligibleSubtotal,
+                (int) $locked->max_payout,
+                $locked->max_payout_percent !== null ? (int) $locked->max_payout_percent : null,
+                $budgetRemaining,
+            )
             : 0;
         $won = $won && $payout > 0;
 
@@ -179,6 +184,19 @@ class RollService
     {
         $isPos = $roll->channel === Roll::CHANNEL_POS;
         $codeReady = ! $roll->won || $roll->code_status === Roll::CODE_CREATED || $isPos;
+        $symbol = Money::symbolFor($shop->currency);
+
+        // What the customer would have won if this roll had gone the other way,
+        // so the widget can tease them to come back. Based on their actual cart
+        // and the shop's current caps.
+        $potentialPayout = null;
+        if (! $roll->won) {
+            $potentialPayout = PayoutCalculator::calculate(
+                (int) $roll->eligible_subtotal,
+                (int) $settings->max_payout,
+                $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
+            );
+        }
 
         return [
             'repeat' => $repeat,
@@ -187,7 +205,11 @@ class RollService
             'displayed_number' => $roll->displayed_number,
             'picked_number' => $roll->picked_number,
             'payout' => $roll->payout,
-            'payout_formatted' => Money::format($roll->payout, Money::symbolFor($shop->currency)),
+            'payout_formatted' => Money::format($roll->payout, $symbol),
+            'potential_payout' => $potentialPayout,
+            'potential_payout_formatted' => $potentialPayout !== null && $potentialPayout > 0
+                ? Money::format($potentialPayout, $symbol)
+                : null,
             'code' => $roll->won && $codeReady && ! $isPos ? $roll->discount_code : null,
             'code_ready' => $codeReady,
             'ends_at' => ! $isPos ? $roll->discount_ends_at?->toIso8601String() : null,

@@ -79,3 +79,54 @@
   .rfi-cssdie--rolling, .rfi-cssdie--landed, .rfi-cssdie--idle { animation: none; }
   .rfi-cssdie--rolling span { opacity: 0.4; }
 }
+
+/* Sexy additions: social proof, streak, loss teaser, share, calendar. */
+.rfi-social {
+  margin: 0 0 10px; padding: 6px 10px; border-radius: 999px;
+  background: rgba(34, 197, 94, 0.12); color: #166534;
+  font-size: 0.82em; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+}
+.rfi-social-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block;
+  box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); animation: rfi-pulse 1.6s ease-out infinite;
+}
+@keyframes rfi-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+}
+
+.rfi-streak {
+  display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px;
+  background: var(--rfi-accent); color: #111827;
+  font-size: 0.6em; font-weight: 700; letter-spacing: 0.03em; vertical-align: middle;
+  text-transform: uppercase;
+}
+
+.rfi-teaser {
+  margin: 10px 0 0; padding: 10px 12px; border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12); color: #78350f;
+  font-size: 0.9em; text-align: center; font-weight: 600;
+}
+
+.rfi-share { margin-top: 12px; text-align: center; }
+.rfi-share-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 999px; border: 2px solid var(--rfi-accent);
+  background: #fff; color: #111827; font: inherit; font-weight: 700; cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.rfi-share-btn::before { content: '✨'; }
+.rfi-share-btn:hover { transform: translateY(-1px); background: var(--rfi-accent); }
+.rfi-share-btn:focus-visible { outline: 3px solid var(--rfi-accent); outline-offset: 2px; }
+
+.rfi-next-streak {
+  margin: 6px 0 0; font-size: 0.85em; color: #78350f; font-weight: 600; text-align: center;
+}
+.rfi-ics {
+  display: inline-block; margin-top: 10px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid #d1d5db; background: #fff; color: #111827;
+  font: inherit; font-size: 0.85em; font-weight: 600; cursor: pointer;
+}
+.rfi-ics:hover { border-color: var(--rfi-accent); color: #78350f; }
+.rfi-ics:focus-visible { outline: 3px solid var(--rfi-accent); outline-offset: 2px; }

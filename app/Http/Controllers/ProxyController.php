@@ -31,13 +31,17 @@ class ProxyController extends Controller
         $test = PreviewLinks::isValid($settings, $request->query('preview'));
 
         $reason = null;
+        $stats = null;
         if (! $test) {
             if (! $settings->enabled || ! $settings->canEnable()) {
                 $reason = 'closed';
             } elseif (! $window->isOpen()) {
                 $reason = 'upcoming';
-            } elseif (DayStats::for($shop->id, $window->promoDate())->closedReason($settings) !== null) {
-                $reason = 'sold_out';
+            } else {
+                $stats = DayStats::for($shop->id, $window->promoDate());
+                if ($stats->closedReason($settings) !== null) {
+                    $reason = 'sold_out';
+                }
             }
         } elseif (! $settings->min_order || ! $settings->max_payout) {
             $reason = 'closed';
@@ -50,6 +54,18 @@ class ProxyController extends Controller
 
         if ($reason === 'closed' || ($reason === 'upcoming' && $next === null)) {
             return $this->noStore(['open' => false, 'reason' => 'closed']);
+        }
+
+        // Social proof: only share once there's at least one real winner today,
+        // so the widget never shows "0 winners".
+        $todayStats = null;
+        if ($stats !== null && $stats->winners > 0) {
+            $todayStats = [
+                'winners' => $stats->winners,
+                'total_payout' => $stats->payout,
+                'total_payout_formatted' => Money::format($stats->payout, $symbol),
+                'message' => WidgetCopy::socialProof($stats->winners, $stats->payout, $symbol),
+            ];
         }
 
         return $this->noStore([
@@ -73,6 +89,9 @@ class ProxyController extends Controller
             'terms_url' => $settings->terms_url,
             'min_order_formatted' => Money::format($settings->min_order, $symbol),
             'max_payout_formatted' => Money::format($settings->max_payout, $symbol),
+            'promo_date' => $window->promoDate(),
+            'previous_promo_date' => $window->previousPromoDate(),
+            'today_stats' => $todayStats,
             'animation' => [
                 'die_color' => $settings->die_color,
                 'number_color' => $settings->die_number_color,

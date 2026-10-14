@@ -18,7 +18,7 @@ class SettingsService
     private const MONEY_FIELDS = ['min_order', 'max_payout', 'daily_budget'];
 
     private const TERMS_FIELDS = [
-        'promo_days', 'start_time', 'end_time', 'min_order', 'max_payout', 'daily_budget',
+        'promo_days', 'start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent', 'daily_budget',
         'max_winners_per_day', 'excluded_collections', 'odds_mode', 'odds_n',
         'promoter_name', 'promoter_registration_number', 'promoter_address', 'promoter_email', 'promoter_phone',
     ];
@@ -43,6 +43,7 @@ class SettingsService
             'end_time' => ['nullable', 'date_format:H:i', 'required_with:start_time'],
             'min_order' => ['required', ...$money, 'not_regex:/^0+(\.0+)?$/'],
             'max_payout' => ['required', ...$money, 'not_regex:/^0+(\.0+)?$/'],
+            'max_payout_percent' => ['nullable', 'integer', 'between:1,100'],
             'daily_budget' => ['nullable', ...$money, 'not_regex:/^0+(\.0+)?$/'],
             'max_winners_per_day' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'excluded_collections' => ['present', 'array', 'max:50'],
@@ -77,6 +78,7 @@ class SettingsService
             'min_order.required' => 'Set a minimum order value.',
             'max_payout.required' => 'Set a maximum payout.',
             'max_payout.not_regex' => 'The maximum payout must be greater than 0.',
+            'max_payout_percent.between' => 'The payout percentage cap must be between 1 and 100.',
             'min_order.not_regex' => 'The minimum order must be greater than 0.',
             '*.regex' => 'Enter an amount like 500 or 499.99.',
         ];
@@ -146,6 +148,7 @@ class SettingsService
                 'end_time' => $settings->end_time,
                 'min_order' => $settings->min_order !== null ? Money::toDecimal($settings->min_order) : null,
                 'max_payout' => $settings->max_payout !== null ? Money::toDecimal($settings->max_payout) : null,
+                'max_payout_percent' => $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
                 'daily_budget' => $settings->daily_budget !== null ? Money::toDecimal($settings->daily_budget) : null,
                 'max_winners_per_day' => $settings->max_winners_per_day,
                 'excluded_collections' => $settings->excluded_collections ?? [],
@@ -216,6 +219,17 @@ class SettingsService
         }
         if ($settings->daily_budget && $settings->max_payout && $settings->daily_budget < $settings->max_payout) {
             $warnings[] = 'Your daily budget is less than one maximum payout, so the first win of the day may be reduced.';
+        }
+        if ($settings->max_payout_percent && $settings->min_order && $settings->max_payout) {
+            $percentOnMin = intdiv((int) $settings->min_order * (int) $settings->max_payout_percent, 100);
+            if ($percentOnMin >= $settings->max_payout) {
+                $warnings[] = sprintf(
+                    'Your %d%% cap on a minimum basket (%s) already reaches %s, so only very large carts will be limited by the maximum payout. Which one bites first is up to you — just double-check this is the mix you meant.',
+                    (int) $settings->max_payout_percent,
+                    Money::format($settings->min_order, $symbol),
+                    Money::format($percentOnMin, $symbol),
+                );
+            }
         }
 
         return $warnings;

@@ -19,6 +19,7 @@ Route::middleware('shopify.embedded')->name('admin.')->group(function () {
     Route::view('/terms', 'admin.terms')->name('terms');
     Route::view('/advert-copy', 'admin.advert')->name('advert');
     Route::view('/reporting', 'admin.reporting')->name('reporting');
+    Route::view('/simulator', 'admin.simulator')->name('simulator');
 });
 
 Route::prefix('op')->name('op.')->group(function () {

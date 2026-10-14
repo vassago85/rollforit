@@ -40,10 +40,14 @@ final class WidgetCopy
     {
         $symbol = Money::symbolFor($shop->currency);
 
+        $cap = $settings->max_payout_percent
+            ? sprintf('up to %d%% of your cart (max %s)', (int) $settings->max_payout_percent, Money::format($settings->max_payout, $symbol))
+            : sprintf('up to %s', Money::format($settings->max_payout, $symbol));
+
         return sprintf(
-            'Spend %s, win up to %s off. T&Cs apply.',
+            'Spend %s, win %s off. T&Cs apply.',
             Money::format($settings->min_order, $symbol),
-            Money::format($settings->max_payout, $symbol),
+            $cap,
         );
     }
 
@@ -82,5 +86,48 @@ final class WidgetCopy
             '{payout}' => Money::format($roll->payout, Money::symbolFor($shop->currency)),
             '{code}' => (string) $roll->discount_code,
         ]);
+    }
+
+    /**
+     * "You could have won R250. Come back Friday at 08:00!" shown under a loss message.
+     */
+    public static function teaserMessage(int $potentialPayout, string $symbol, ?string $nextLabel): string
+    {
+        $amount = Money::format($potentialPayout, $symbol);
+        if ($nextLabel) {
+            return "That cart could have won {$amount}. Come back {$nextLabel}.";
+        }
+
+        return "That cart could have won {$amount}. Come back on the next promo day.";
+    }
+
+    /**
+     * Non-personal daily social proof line. Returns null (via the controller) when
+     * no one has won yet.
+     */
+    public static function socialProof(int $winners, int $totalPayout, string $symbol): string
+    {
+        $amount = Money::format($totalPayout, $symbol);
+        $plural = $winners === 1 ? 'winner' : 'winners';
+
+        return "{$amount} given away today, {$winners} {$plural} so far.";
+    }
+
+    /**
+     * "Day 3 streak!" with a milestone flourish on 3/7/14/30-day streaks.
+     */
+    public static function streakBadge(int $count): string
+    {
+        if ($count < 2) {
+            return '';
+        }
+        $flame = match (true) {
+            $count >= 30 => ' 🔥🔥🔥',
+            $count >= 14 => ' 🔥🔥',
+            $count >= 7 => ' 🔥',
+            default => '',
+        };
+
+        return "Day {$count} streak!{$flame}";
     }
 }

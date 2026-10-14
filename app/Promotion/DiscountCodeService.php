@@ -26,10 +26,13 @@ class DiscountCodeService
      */
     public function createFor(Shop $shop, ShopSettings $settings, Roll $roll): Roll
     {
-        PayoutGuard::assert($roll->payout, $settings->max_payout, [
-            'shop' => $shop->domain,
-            'roll_id' => $roll->id,
-        ]);
+        PayoutGuard::assert(
+            $roll->payout,
+            $settings->max_payout,
+            (int) $roll->eligible_subtotal,
+            $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
+            ['shop' => $shop->domain, 'roll_id' => $roll->id],
+        );
 
         if ($roll->code_status === Roll::CODE_CREATED) {
             return $roll;

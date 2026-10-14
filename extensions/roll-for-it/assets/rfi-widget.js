@@ -12,8 +12,35 @@
     '#cart-drawer .cart__footer',
   ];
   const STORE = window.sessionStorage;
+  const LOCAL = window.localStorage;
   const RESULT_KEY = 'rfi_result';
+  const STREAK_KEY = 'rfi_streak';
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* Streak lives in localStorage so it survives sessions, but holds no PII. */
+  function readStreak() {
+    try {
+      const raw = JSON.parse(LOCAL.getItem(STREAK_KEY) || 'null');
+      return raw && typeof raw.count === 'number' ? raw : { count: 0, last_promo_date: null };
+    } catch (e) { return { count: 0, last_promo_date: null }; }
+  }
+  function writeStreak(s) { try { LOCAL.setItem(STREAK_KEY, JSON.stringify(s)); } catch (e) {} }
+  function updateStreak(result, status) {
+    if (result.test || result.repeat || !status.promo_date) return readStreak();
+    const current = readStreak();
+    const next = current.last_promo_date === status.promo_date
+      ? current // already counted for today, don't double-count on repeat renders
+      : current.last_promo_date === status.previous_promo_date
+        ? { count: current.count + 1, last_promo_date: status.promo_date }
+        : { count: 1, last_promo_date: status.promo_date };
+    writeStreak(next);
+    return next;
+  }
+  function streakBadge(count) {
+    if (count < 2) return '';
+    const flame = count >= 30 ? ' 🔥🔥🔥' : count >= 14 ? ' 🔥🔥' : count >= 7 ? ' 🔥' : '';
+    return 'Day ' + count + ' streak!' + flame;
+  }
 
   const params = new URLSearchParams(location.search);
   if (params.get('rfi_preview')) STORE.setItem('rfi_preview', params.get('rfi_preview'));
@@ -229,9 +256,16 @@
       const s = this.status;
       const a = s.animation;
       const banner = esc(s.banner).replace('T&amp;Cs apply.', '<a href="' + esc(s.terms_url) + '" target="_blank" rel="noopener">T&amp;Cs apply.</a>');
+      const streakText = streakBadge(readStreak().count);
+      const streakHtml = streakText ? '<span class="rfi-streak">' + esc(streakText) + '</span>' : '';
+      const testBadge = s.test ? ' <span class="rfi-test">Test mode</span>' : '';
+      const socialHtml = s.today_stats && s.today_stats.message
+        ? '<p class="rfi-social"><span class="rfi-social-dot" aria-hidden="true"></span>' + esc(s.today_stats.message) + '</p>'
+        : '';
       this.host.innerHTML = '<div class="rfi-card" style="--rfi-accent:' + esc(a.accent_color) + '">'
         + '<p class="rfi-banner">' + banner + '</p>'
-        + '<h3 class="rfi-title">' + esc(s.headline) + (s.test ? ' <span class="rfi-test">Test mode</span>' : '') + '</h3>'
+        + socialHtml
+        + '<h3 class="rfi-title">' + esc(s.headline) + testBadge + streakHtml + '</h3>'
         + '<div class="rfi-body"></div>'
         + '<div class="rfi-next" hidden></div>'
         + '<p class="rfi-fine">' + esc(s.odds) + ' ' + esc(s.one_roll) + '</p>'
@@ -253,10 +287,18 @@
       const box = this.host.querySelector('.rfi-next');
       if (!next || !box) return;
       const deadline = performance.now() + Math.max(2, next.starts_in) * 1000;
+      const streak = readStreak().count;
+      const streakLine = streak >= 2
+        ? '<p class="rfi-next-streak">You\'re on a ' + streak + '-day streak. Don\'t break it.</p>'
+        : '';
       box.hidden = false;
       box.innerHTML = '<p class="rfi-next-label">Next roll: ' + esc(next.label) + '</p>'
-        + '<p class="rfi-timer" role="timer" aria-label="Time until the next roll"></p>';
+        + '<p class="rfi-timer" role="timer" aria-label="Time until the next roll"></p>'
+        + streakLine
+        + '<button type="button" class="rfi-ics">Add to calendar</button>';
       const timer = box.querySelector('.rfi-timer');
+      const ics = box.querySelector('.rfi-ics');
+      if (ics) ics.addEventListener('click', () => this.downloadIcs(next));
       const tick = () => {
         const left = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
         timer.innerHTML = clock(left);
@@ -268,6 +310,34 @@
       };
       tick();
       this.countdown = setInterval(tick, 1000);
+    }
+
+    /* ICS file is built client-side so there's no backend to call. */
+    downloadIcs(next) {
+      const start = new Date(next.starts_at);
+      if (isNaN(start.getTime())) return;
+      const end = new Date(start.getTime() + 30 * 60 * 1000); // 30-minute window
+      const fmt = (d) => d.toISOString().replace(/[-:]|\.\d{3}/g, '');
+      const uid = 'rfi-' + fmt(start) + '-' + Math.random().toString(36).slice(2, 8) + '@roll4it';
+      const name = (this.status && this.status.headline) || 'Roll4It';
+      const ics = [
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Roll4It//EN', 'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        'UID:' + uid,
+        'DTSTAMP:' + fmt(new Date()),
+        'DTSTART:' + fmt(start),
+        'DTEND:' + fmt(end),
+        'SUMMARY:' + name + ' opens',
+        'DESCRIPTION:Your next chance to roll for a discount.',
+        'END:VEVENT', 'END:VCALENDAR',
+      ].join('\r\n');
+      const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'roll4it-next-roll.ics';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     stopCountdown() {
@@ -398,7 +468,21 @@
       msg.textContent = (result.repeat ? 'You have already rolled today. ' : '') + result.message;
       this.body.appendChild(msg);
       this.live.textContent = msg.textContent;
+
+      // Streak: only tick for a fresh, non-test, non-repeat roll.
+      if (fresh) updateStreak(result, this.status);
       if (!this.countdown) this.startCountdown();
+      this.updateStreakBadge();
+
+      // Loss teaser: tell them what the cart could have won, and when they can come back.
+      if (!result.won && result.potential_payout_formatted) {
+        const nextLabel = this.status.next_roll && this.status.next_roll.label;
+        const tease = document.createElement('p');
+        tease.className = 'rfi-teaser';
+        tease.textContent = 'That cart could have won ' + result.potential_payout_formatted + '.'
+          + (nextLabel ? ' Come back ' + nextLabel + '.' : ' Come back on the next promo day.');
+        this.body.appendChild(tease);
+      }
 
       if (fresh && result.won) {
         sound && sound.win();
@@ -427,6 +511,47 @@
         note.textContent = 'Your code: ' + result.code;
         this.body.appendChild(note);
       }
+
+      // Share-a-win: only on a real win (not test / not POS), and only when the result makes sense to share.
+      if (result.won && !result.test && result.channel !== 'pos') {
+        this.appendShareButton(result);
+      }
+    }
+
+    updateStreakBadge() {
+      const title = this.host.querySelector('.rfi-title');
+      if (!title) return;
+      const existing = title.querySelector('.rfi-streak');
+      const text = streakBadge(readStreak().count);
+      if (existing) existing.remove();
+      if (text) {
+        const span = document.createElement('span');
+        span.className = 'rfi-streak';
+        span.textContent = text;
+        title.appendChild(document.createTextNode(' '));
+        title.appendChild(span);
+      }
+    }
+
+    appendShareButton(result) {
+      const wrap = document.createElement('div');
+      wrap.className = 'rfi-share';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'rfi-share-btn';
+      btn.textContent = 'Share this win';
+      const text = 'I just won ' + (result.payout_formatted || 'a discount') + ' off at ' + location.hostname + ' with Roll4It!';
+      const url = location.origin;
+      btn.addEventListener('click', async () => {
+        if (navigator.share) {
+          try { await navigator.share({ title: 'Roll4It win', text, url }); return; } catch (e) { /* fall through */ }
+        }
+        // Fallback: open a WhatsApp intent in a new tab + copy a link.
+        const wa = 'https://wa.me/?text=' + encodeURIComponent(text + ' ' + url);
+        window.open(wa, '_blank', 'noopener');
+      });
+      wrap.appendChild(btn);
+      this.body.appendChild(wrap);
     }
   }
 
