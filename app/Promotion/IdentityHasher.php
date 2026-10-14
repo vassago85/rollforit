@@ -54,6 +54,16 @@ final class IdentityHasher
         return $normalised === null ? null : self::hmac($normalised);
     }
 
+    /**
+     * Shopify's signed app-proxy `logged_in_customer_id`. Digits only; empty/junk is ignored.
+     */
+    public static function hashShopifyCustomerId(string $customerId): ?string
+    {
+        $id = preg_replace('/\D/', '', $customerId) ?? '';
+
+        return $id === '' ? null : self::hmac('shopify-customer:'.$id);
+    }
+
     private static function hmac(string $value): string
     {
         $pepper = (string) config('shopify.roll.email_pepper');

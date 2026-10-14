@@ -20,9 +20,9 @@
 <h3>3. How to enter</h3>
 <ul>
     <li>Add products worth at least {{ $minOrder }} to your cart. Gift cards and shipping do not count towards this amount.</li>
-    <li>On the cart page, enter your email address, pick a number from 1 to 10 and roll the die.</li>
+    <li>On the cart page, pick a number from 1 to 10 and roll the die. If you are signed in to the store, we use your account. If you are a guest, you will be asked for an email address.</li>
     <li>The number you pick is for fun only. It does not affect whether you win.</li>
-    <li>You may roll once per promo day. The limit is enforced per email address and per phone number. If you give us both and either one has already rolled today, the earlier result applies.</li>
+    <li>You may roll once per promo day. The limit is enforced per store account, per email address and per phone number. If any of those has already rolled today, the earlier result applies.</li>
     <li>The promoter may limit the number of rolls from one connection to prevent abuse.</li>
 </ul>
 
@@ -73,7 +73,7 @@
 
 <h3>8. Your information</h3>
 <ul>
-    <li>Your email address and (for in-store entries) your cell phone number are used only to enforce one roll per promo day. Both are stored as one-way keyed hashes, not as readable text, and are never used for marketing.</li>
+    <li>If you are signed in, we store a one-way hash of your store account id. If you are a guest (or rolling in store), we store a one-way hash of the email or phone number you give us. These are used only to enforce one roll per promo day and are never used for marketing.</li>
     <li>Your IP address is recorded to prevent abuse and is deleted after {{ $ipDays }} days.</li>
     <li>Roll records are kept for {{ $retentionYears }} years to meet record-keeping obligations for promotional competitions, then deleted.</li>
     <li>To ask about or delete your information, contact {{ $settings->promoter_email }}.</li>

@@ -348,15 +348,19 @@
     renderForm(error) {
       const nums = Array.from({ length: 10 }, (_, i) => i + 1)
         .map((n) => '<button type="button" class="rfi-num" data-n="' + n + '" aria-pressed="' + (this.picked === n) + '">' + n + '</button>').join('');
-      this.body.innerHTML = '<label class="rfi-label" for="rfi-email-' + this.uid() + '">Your email</label>'
-        + '<input class="rfi-email" id="rfi-email-' + this.uid() + '" type="email" autocomplete="email" placeholder="you@example.com" value="' + esc(this.email || '') + '">'
+      const loggedIn = !!this.status.logged_in;
+      const emailBlock = loggedIn
+        ? '<p class="rfi-note">Signed in — this roll is tied to your McTactical account.</p>'
+        : '<label class="rfi-label" for="rfi-email-' + this.uid() + '">Your email</label>'
+          + '<input class="rfi-email" id="rfi-email-' + this.uid() + '" type="email" autocomplete="email" placeholder="you@example.com" value="' + esc(this.email || '') + '">';
+      this.body.innerHTML = emailBlock
         + '<p class="rfi-label">Pick your number</p><div class="rfi-grid" role="group" aria-label="Pick a number from 1 to 10">' + nums + '</div>'
         + '<p class="rfi-note">' + esc(this.status.disclaimer) + '</p>'
         + '<p class="rfi-min" hidden></p>'
         + (error ? '<p class="rfi-error" role="alert">' + esc(error) + '</p>' : '')
         + '<button type="button" class="rfi-roll" disabled>Roll the die</button>';
       const email = this.body.querySelector('.rfi-email');
-      email.addEventListener('input', () => { this.email = email.value; this.updateButton(); });
+      if (email) email.addEventListener('input', () => { this.email = email.value; this.updateButton(); });
       this.body.querySelector('.rfi-grid').addEventListener('click', (e) => {
         const b = e.target.closest('.rfi-num');
         if (!b) return;
@@ -387,8 +391,8 @@
       } else {
         min.hidden = true;
       }
-      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((this.email || '').trim());
-      button.disabled = this.busy || !this.cart || short > 0 || !emailOk || !this.picked;
+      const identityOk = !!this.status.logged_in || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((this.email || '').trim());
+      button.disabled = this.busy || !this.cart || short > 0 || !identityOk || !this.picked;
     }
 
     async makeDie(stage) {
@@ -421,7 +425,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({
-            email: this.email.trim(),
+            email: this.status.logged_in ? null : (this.email || '').trim(),
             picked_number: this.picked,
             lines: (this.cart.items || []).map((i) => ({ variant_id: i.variant_id, quantity: i.quantity })),
             cart_token: this.cart.token,

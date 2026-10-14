@@ -86,6 +86,7 @@ class ProxyController extends Controller
             'spend_to_roll' => WidgetCopy::spendToRoll($shop, $settings),
             'one_roll' => 'One roll per customer per day.',
             'sold_out_message' => 'Today\'s prizes have all been won. Try again next promo day.',
+            'logged_in' => $request->attributes->get('logged_in_customer_id') !== null,
             'terms_url' => $settings->terms_url,
             'min_order_formatted' => Money::format($settings->min_order, $symbol),
             'max_payout_formatted' => Money::format($settings->max_payout, $symbol),
@@ -106,8 +107,9 @@ class ProxyController extends Controller
 
     public function roll(Request $request, RollService $rolls): JsonResponse
     {
+        $customerId = $request->attributes->get('logged_in_customer_id');
         $data = $request->validate([
-            'email' => ['required', 'email:rfc', 'max:254'],
+            'email' => [$customerId ? 'nullable' : 'required', 'email:rfc', 'max:254'],
             'picked_number' => ['required', 'integer', 'between:1,10'],
             'lines' => ['required', 'array', 'min:1', 'max:'.config('shopify.roll.max_cart_lines')],
             'lines.*.variant_id' => ['required'],
@@ -121,10 +123,11 @@ class ProxyController extends Controller
 
         try {
             $result = $rolls->roll($shop, new RollInput(
-                email: $data['email'],
+                email: $data['email'] ?? null,
                 pickedNumber: (int) $data['picked_number'],
                 lines: $data['lines'],
                 ip: $request->attributes->get('customer_ip'),
+                shopifyCustomerId: $customerId,
                 cartToken: $data['cart_token'] ?? null,
                 currency: $data['currency'] ?? null,
                 previewToken: $data['preview'] ?? null,

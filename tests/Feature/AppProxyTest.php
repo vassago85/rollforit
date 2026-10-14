@@ -7,7 +7,7 @@ it('accepts a correctly signed status request', function () {
 
     $this->getJson('/api/proxy/status?'.proxyQuery($shop))
         ->assertOk()
-        ->assertJson(['open' => true, 'banner' => 'Spend R500, win up to R1,000 off. T&Cs apply.'])
+        ->assertJson(['open' => true, 'logged_in' => false, 'banner' => 'Spend R500, win up to R1,000 off. T&Cs apply.'])
         ->assertJsonPath('terms_url', 'https://shop.example.co.za/pages/roll-for-it-terms')
         ->assertHeader('Cache-Control', 'no-store, private');
 });
@@ -60,4 +60,54 @@ it('validates the roll body', function () {
     $this->postJson('/api/proxy/roll?'.proxyQuery($shop), rollPayload(['email' => 'not-an-email', 'picked_number' => 11]))
         ->assertStatus(422)
         ->assertJsonValidationErrors(['email', 'picked_number']);
+});
+
+it('marks status as logged in when Shopify signed a customer id onto the proxy request', function () {
+    $shop = makeShop();
+
+    $this->getJson('/api/proxy/status?'.proxyQuery($shop, ['logged_in_customer_id' => '4242']))
+        ->assertOk()
+        ->assertJson(['logged_in' => true]);
+});
+
+it('lets a signed-in customer roll without an email', function () {
+    $shop = makeShop();
+    forceNextWin($shop);
+    fakeShopify([1 => ['price' => '600.00']]);
+
+    $result = test()->withHeaders(['Accept' => 'application/json'])
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['logged_in_customer_id' => '4242', 'nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
+        ->assertOk()
+        ->json();
+
+    expect($result['won'])->toBeTrue()
+        ->and(\App\Models\Roll::first()->email_hash)->toBeNull()
+        ->and(\App\Models\Roll::first()->shopify_customer_hash)->toBe(\App\Promotion\IdentityHasher::hashShopifyCustomerId('4242'));
+});
+
+it('refuses a guest roll with no email', function () {
+    $shop = makeShop();
+    fakeShopify([1 => ['price' => '600.00']]);
+
+    test()->withHeaders(['Accept' => 'application/json'])
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['email']);
+});
+
+it('returns the same result if the same Shopify customer rolls twice', function () {
+    $shop = makeShop();
+    forceNextWin($shop);
+    fakeShopify([1 => ['price' => '600.00']]);
+
+    $first = test()->withHeaders(['Accept' => 'application/json'])
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['logged_in_customer_id' => '99', 'nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
+        ->assertOk()->json();
+    $second = test()->withHeaders(['Accept' => 'application/json'])
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['logged_in_customer_id' => '99', 'nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
+        ->assertOk()->json();
+
+    expect($second['repeat'])->toBeTrue()
+        ->and($second['won'])->toBe($first['won'])
+        ->and(\App\Models\Roll::count())->toBe(1);
 });

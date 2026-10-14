@@ -1,5 +1,5 @@
 (() => {
-  const MIN_ORDER = 50000;
+  const MIN_ORDER = 100000;
   const $ = (id) => document.getElementById(id);
   const money = (cents) => 'R' + Math.round(cents / 100).toLocaleString('en-ZA').replace(/\u00a0|\s/g, ',');
 
@@ -89,14 +89,17 @@
   function calc() {
     const min = num('c-min') * 100;
     const max = num('c-max') * 100;
+    const pct = num('c-pct');
     const n = Number($('c-n').value);
     const rolls = num('c-rolls');
     const aov = num('c-aov') * 100;
     const budget = num('c-budget') * 100;
     const days = num('c-days') || 1;
 
+    const percentCap = pct > 0 && aov > 0 ? Math.floor(aov * pct / 100) : Infinity;
+    const typicalWin = Math.min(aov || max, max, percentCap === Infinity ? max : percentCap);
     const winners = rolls / n;
-    let perDay = winners * max;
+    let perDay = winners * typicalWin;
     const capped = budget > 0 && perDay > budget;
     if (capped) perDay = budget;
     const revenue = rolls * aov;
@@ -110,7 +113,8 @@
 
     const notes = [
       'Each roll costs you at most ' + money(max / n) + ' on average: the maximum prize divided by ' + n + '.',
-      'Real prizes are usually lower, because a winner only gets up to what\'s in their cart, and unused codes cost nothing.',
+      'A typical win on a ' + money(aov) + ' cart is ' + money(typicalWin)
+        + (pct > 0 ? ' (capped at ' + pct + '% of the cart, and at ' + money(max) + ').' : ' (capped at ' + money(max) + ').'),
     ];
     if (capped) notes.push('Your daily budget kicks in: rolling closes for the day once ' + money(budget) + ' has been won.');
     if (max > 0 && min > 0 && max < min) notes.push('The maximum prize is below the minimum spend, so winners always still pay something.');

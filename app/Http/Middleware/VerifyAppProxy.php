@@ -46,6 +46,7 @@ class VerifyAppProxy
 
         $request->attributes->set('shop', $shop);
         $request->attributes->set('customer_ip', self::customerIp($request));
+        $request->attributes->set('logged_in_customer_id', self::loggedInCustomerId($params));
         $request->attributes->set('path_prefix', $params['path_prefix'][0] ?? null);
 
         return $next($request);
@@ -65,5 +66,21 @@ class VerifyAppProxy
         }
 
         return $request->ip();
+    }
+
+    /**
+     * Shopify signs `logged_in_customer_id` on every app-proxy request. Empty string
+     * means a guest. Never read this from the JSON body — the client can fake that.
+     *
+     * @param  array<string, list<string>>  $params
+     */
+    public static function loggedInCustomerId(array $params): ?string
+    {
+        $raw = trim((string) ($params['logged_in_customer_id'][0] ?? ''));
+        if ($raw === '' || ! ctype_digit($raw)) {
+            return null;
+        }
+
+        return $raw;
     }
 }

@@ -2,8 +2,9 @@
 (() => {
   const params = new URLSearchParams(location.search);
   const state = params.get('state') || 'open';
-  const MIN_ORDER = 50000;
-  const MAX_PAYOUT = 100000;
+  const MIN_ORDER = 100000;
+  const MAX_PAYOUT = 150000;
+  const MAX_PERCENT = 50;
   const demo = {
     subtotal: Number(params.get('subtotal') || 194900),
     outcome: params.get('outcome') || 'fair',
@@ -42,18 +43,22 @@
       reason: state === 'open' ? null : 'upcoming',
       next_roll: next ? { starts_at: next.toISOString(), starts_in: Math.round((next - new Date()) / 1000), label: label(next) } : null,
       test: false,
+      logged_in: false,
       currency: 'ZAR',
       min_order: MIN_ORDER,
-      banner: 'Spend R500, win up to R1,000 off. T&Cs apply.',
+      banner: 'Spend R1,000, win up to 50% of your cart (max R1,500) off. T&Cs apply.',
       headline: 'Roll4It!',
       odds: 'One in every 10 entries wins.',
       disclaimer: 'Your number is just for fun. It does not change your odds: the result is decided when you roll.',
-      spend_to_roll: 'Spend R500 to roll',
+      spend_to_roll: 'Spend R1,000 to roll',
       one_roll: 'One roll per customer per day.',
       sold_out_message: "Today's prizes have all been won. Try again next promo day.",
       terms_url: '#terms',
-      min_order_formatted: 'R500',
-      max_payout_formatted: 'R1,000',
+      min_order_formatted: 'R1,000',
+      max_payout_formatted: 'R1,500',
+      promo_date: new Date().toISOString().slice(0, 10),
+      previous_promo_date: null,
+      today_stats: { winners: 3, total_payout: 337500, total_payout_formatted: 'R3,375', message: 'R3,375 given away today, 3 winners so far.' },
       animation: { die_color: '#1f2937', number_color: '#ffffff', accent_color: '#f59e0b', duration_ms: 2500, sound: true, celebration: true },
       drawer_selector: null,
     };
@@ -69,19 +74,24 @@
   async function roll(body) {
     await sleep(400);
     if (demo.subtotal < MIN_ORDER) {
-      return json({ error: 'below_min_order', message: 'Your cart must be at least R500 (excluding gift cards) to roll.' }, 422);
+      return json({ error: 'below_min_order', message: 'Your cart must be at least R1,000 (excluding gift cards) to roll.' }, 422);
     }
     const won = demo.outcome === 'win' || (demo.outcome === 'fair' && rand(10) === 1);
     const picked = Number(body.picked_number);
     let shown = picked;
     while (!won && shown === picked) shown = rand(10);
-    const payout = won ? Math.min(demo.subtotal, MAX_PAYOUT) : 0;
+    const percentCap = Math.floor(demo.subtotal * MAX_PERCENT / 100);
+    const payout = won ? Math.min(demo.subtotal, MAX_PAYOUT, percentCap) : 0;
+    const potential = Math.min(demo.subtotal, MAX_PAYOUT, percentCap);
     const code = won ? 'ROLL-' + Math.random().toString(36).slice(2, 8).toUpperCase() : null;
     demo.lastPayout = payout;
     post({ type: 'rolled', won, payout });
     return json({
       repeat: false, test: false, won, displayed_number: shown, picked_number: picked,
-      payout, payout_formatted: money(payout), code, code_ready: true, ends_at: null,
+      payout, payout_formatted: money(payout),
+      potential_payout: won ? null : potential,
+      potential_payout_formatted: won ? null : money(potential),
+      code, code_ready: true, ends_at: null, channel: 'online',
       message: won
         ? 'You won ' + money(payout) + ' off your order! Code ' + code + ' has been applied to your cart.'
         : 'Not this time. Thanks for rolling, and good luck next time!',

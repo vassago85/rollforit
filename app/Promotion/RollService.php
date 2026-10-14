@@ -38,16 +38,19 @@ class RollService
         $promoDate = $window->promoDate();
         $emailHash = $input->email !== null && $input->email !== '' ? IdentityHasher::hashEmail($input->email) : null;
         $phoneHash = $input->phone !== null && $input->phone !== '' ? IdentityHasher::hashPhone($input->phone) : null;
+        $customerHash = $input->shopifyCustomerId !== null && $input->shopifyCustomerId !== ''
+            ? IdentityHasher::hashShopifyCustomerId($input->shopifyCustomerId)
+            : null;
 
         if ($input->phone && ! $phoneHash) {
             throw new RollRejected(RollRejected::CURRENCY, 'That phone number does not look right. Please check and try again.');
         }
-        if (! $emailHash && ! $phoneHash) {
-            throw new RollRejected(RollRejected::CURRENCY, 'Enter an email or phone number to roll.');
+        if (! $emailHash && ! $phoneHash && ! $customerHash) {
+            throw new RollRejected(RollRejected::CURRENCY, 'Sign in or enter an email to roll.');
         }
 
         if (! $isTest) {
-            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $promoDate);
+            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate);
             if ($existing) {
                 return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $existing), repeat: true);
             }
@@ -75,10 +78,10 @@ class RollService
 
         try {
             $roll = DB::transaction(fn () => $this->allocateAndRecord(
-                $shop, $settings, $input, $priced, $emailHash, $phoneHash, $promoDate, $isTest, $window,
+                $shop, $settings, $input, $priced, $emailHash, $phoneHash, $customerHash, $promoDate, $isTest, $window,
             ));
         } catch (UniqueConstraintViolationException) {
-            $roll = $this->existingRoll($shop, $emailHash, $phoneHash, $promoDate);
+            $roll = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate);
             if (! $roll) {
                 throw new RollRejected(RollRejected::CLOSED, 'Please try again.', 409);
             }
@@ -96,6 +99,7 @@ class RollService
         PricedCart $priced,
         ?string $emailHash,
         ?string $phoneHash,
+        ?string $customerHash,
         string $promoDate,
         bool $isTest,
         PromoWindow $window,
@@ -108,7 +112,7 @@ class RollService
         if ($isTest) {
             $won = $locked->preview_outcome === 'win';
         } else {
-            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $promoDate);
+            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate);
             if ($existing) {
                 return $existing;
             }
@@ -143,6 +147,7 @@ class RollService
             'terms_version_id' => TermsVersion::where('shop_id', $shop->id)->max('id'),
             'email_hash' => $emailHash,
             'phone_hash' => $phoneHash,
+            'shopify_customer_hash' => $customerHash,
             'channel' => $input->channel,
             'ip' => $input->ip,
             'cart_token' => $input->cartToken ? substr($input->cartToken, 0, 255) : null,
@@ -215,27 +220,30 @@ class RollService
             'ends_at' => ! $isPos ? $roll->discount_ends_at?->toIso8601String() : null,
             'message' => $codeReady
                 ? WidgetCopy::resultMessage($shop, $settings, $roll)
-                : 'You won! We could not create your code just now. Roll again with the same email in a moment to collect it.',
+                : 'You won! We could not create your code just now. Roll again in a moment to collect it.',
             'roll_id' => $roll->id,
             'channel' => $roll->channel,
         ];
     }
 
-    private function existingRoll(Shop $shop, ?string $emailHash, ?string $phoneHash, string $promoDate): ?Roll
+    private function existingRoll(Shop $shop, ?string $emailHash, ?string $phoneHash, ?string $customerHash, string $promoDate): ?Roll
     {
-        if (! $emailHash && ! $phoneHash) {
+        if (! $emailHash && ! $phoneHash && ! $customerHash) {
             return null;
         }
 
         return Roll::where('shop_id', $shop->id)
             ->whereDate('promo_date', $promoDate)
             ->where('is_test', false)
-            ->where(function ($q) use ($emailHash, $phoneHash) {
+            ->where(function ($q) use ($emailHash, $phoneHash, $customerHash) {
                 if ($emailHash) {
                     $q->orWhere('email_hash', $emailHash);
                 }
                 if ($phoneHash) {
                     $q->orWhere('phone_hash', $phoneHash);
+                }
+                if ($customerHash) {
+                    $q->orWhere('shopify_customer_hash', $customerHash);
                 }
             })
             ->first();

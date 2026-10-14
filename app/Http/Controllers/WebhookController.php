@@ -6,6 +6,7 @@ use App\Models\PrivacyRequest;
 use App\Models\Roll;
 use App\Models\Shop;
 use App\Promotion\EmailHasher;
+use App\Promotion\IdentityHasher;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -51,8 +52,7 @@ class WebhookController extends Controller
 
     private function dataRequest(Shop $shop, Request $request): void
     {
-        $email = (string) $request->input('customer.email', '');
-        $matched = $email !== '' ? Roll::where('shop_id', $shop->id)->where('email_hash', EmailHasher::hash($email))->count() : 0;
+        $matched = $this->rollsForCustomer($shop, $request)->count();
 
         PrivacyRequest::create([
             'shop_id' => $shop->id,
@@ -69,10 +69,7 @@ class WebhookController extends Controller
 
     private function customerRedact(Shop $shop, Request $request): void
     {
-        $email = (string) $request->input('customer.email', '');
-        $deleted = $email !== ''
-            ? Roll::where('shop_id', $shop->id)->where('email_hash', EmailHasher::hash($email))->delete()
-            : 0;
+        $deleted = $this->rollsForCustomer($shop, $request)->delete();
 
         PrivacyRequest::create([
             'shop_id' => $shop->id,
@@ -86,5 +83,24 @@ class WebhookController extends Controller
     private function shopRedact(Shop $shop): void
     {
         $shop->delete();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Builder<Roll>
+     */
+    private function rollsForCustomer(Shop $shop, Request $request)
+    {
+        $email = (string) $request->input('customer.email', '');
+        $customerId = (string) $request->input('customer.id', '');
+        $customerHash = $customerId !== '' ? IdentityHasher::hashShopifyCustomerId($customerId) : null;
+
+        return Roll::where('shop_id', $shop->id)->where(function ($q) use ($email, $customerHash) {
+            if ($email !== '') {
+                $q->orWhere('email_hash', EmailHasher::hash($email));
+            }
+            if ($customerHash) {
+                $q->orWhere('shopify_customer_hash', $customerHash);
+            }
+        });
     }
 }

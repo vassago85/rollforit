@@ -21,15 +21,22 @@ final class RollInput
         public readonly ?string $previewToken = null,
         public readonly string $channel = Roll::CHANNEL_ONLINE,
         public readonly ?int $posSubtotalCents = null,
+        public readonly ?string $shopifyCustomerId = null,
     ) {
         if ($this->channel === Roll::CHANNEL_POS && $this->posSubtotalCents === null) {
             throw new InvalidArgumentException('POS rolls require posSubtotalCents.');
         }
-        if ($this->channel === Roll::CHANNEL_ONLINE && ($this->email === null || $this->email === '')) {
-            throw new InvalidArgumentException('Online rolls require an email.');
+        if ($this->channel === Roll::CHANNEL_ONLINE && ! $this->hasOnlineIdentity()) {
+            throw new InvalidArgumentException('Online rolls require a Shopify login or an email.');
         }
-        if (($this->email === null || $this->email === '') && ($this->phone === null || $this->phone === '')) {
+        if ($this->channel === Roll::CHANNEL_POS && ($this->email === null || $this->email === '') && ($this->phone === null || $this->phone === '')) {
             throw new InvalidArgumentException('Either email or phone must be provided.');
         }
+    }
+
+    public function hasOnlineIdentity(): bool
+    {
+        return ($this->shopifyCustomerId !== null && $this->shopifyCustomerId !== '')
+            || ($this->email !== null && $this->email !== '');
     }
 }
