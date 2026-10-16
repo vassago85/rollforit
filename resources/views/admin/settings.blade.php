@@ -76,6 +76,10 @@
                 </s-select>
             </s-stack>
             <s-paragraph id="odds-statement"></s-paragraph>
+            <s-stack direction="inline" gap="small-200" id="odds-nudge" hidden>
+                <s-text tone="caution" id="odds-nudge-text"></s-text>
+                <s-button id="odds-use-natural" variant="tertiary">Use natural odds</s-button>
+            </s-stack>
         </s-stack>
     </s-section>
 
@@ -258,16 +262,16 @@
     const guaranteed = el('odds_mode').value === 'guaranteed';
     const dice = parseInt(el('dice_count').value, 10) || 1;
     const natural = dice === 2 ? 11 : 10;
-    // Call out when the current N isn't the natural pairing for the chosen dice,
-    // so merchants know "1 in 11" is the expected default for two dice.
-    const nudge = (n && n !== natural)
-      ? ' Tip: natural odds for ' + (dice === 2 ? '2 dice' : '1 die') + ' is 1 in ' + natural + '.'
-      : '';
     el('odds-statement').textContent = n > 1
       ? 'Customers will see: "' + (guaranteed ? 'One in every ' + n + ' entries wins.' : 'Each roll has a 1 in ' + n + ' chance to win.') + '"'
         + (guaranteed ? ' Rolls are dealt in blocks of ' + n + ' with exactly one winner per block; blocks carry over between days.' : '')
-        + nudge
       : '';
+    // Standalone nudge with a one-click "Use natural odds" button.
+    const offNatural = n && n !== natural;
+    el('odds-nudge').hidden = !offNatural;
+    if (offNatural) {
+      el('odds-nudge-text').textContent = 'Natural odds for ' + (dice === 2 ? '2 dice' : '1 die') + ' is 1 in ' + natural + '.';
+    }
   }
 
   function collect() {
@@ -323,19 +327,17 @@
     el(id).addEventListener('input', updateLive);
     el(id).addEventListener('change', updateLive);
   });
-  // Flipping Dice snaps Odds to its natural pairing (1 die → 1 in 10, 2 dice → 1 in 11).
-  // The merchant can still override N afterwards; we only auto-set when the current N is
-  // the "other" default, so a hand-tuned value is left alone.
-  el('dice_count').addEventListener('change', () => {
+  // Flipping Dice always snaps Odds to its natural pairing (1 die → 1 in 10, 2 dice → 1 in 11).
+  // The merchant can still override N afterwards by typing a new value.
+  function naturalFor(dice) { return dice === 2 ? 11 : 10; }
+  function snapToNatural() {
     const dice = parseInt(el('dice_count').value, 10) || 1;
-    const current = parseInt(el('odds_n').value, 10);
-    const natural = dice === 2 ? 11 : 10;
-    const otherDefault = dice === 2 ? 10 : 11;
-    if (current === otherDefault || !current) {
-      el('odds_n').value = String(natural);
-      updateLive();
-    }
-  });
+    el('odds_n').value = String(naturalFor(dice));
+    updateLive();
+  }
+  el('dice_count').addEventListener('change', snapToNatural);
+  const naturalBtn = el('odds-use-natural');
+  if (naturalBtn) naturalBtn.addEventListener('click', snapToNatural);
   el('pick-collections').addEventListener('click', async () => {
     const picked = await shopify.resourcePicker({
       type: 'collection',
