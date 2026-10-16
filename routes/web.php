@@ -26,7 +26,22 @@ Route::middleware('shopify.embedded')->name('admin.')->group(function () {
 // Test-lab iframe shell. Served dynamically so the widget bundle URLs always
 // carry the current file mtime as a cache-buster, otherwise Shopify Admin's
 // embedded webview will keep showing the previous version of the widget JS/CSS.
+//
+// We also auto-mirror the extension bundle into public/demo/assets whenever it
+// is newer. The storefront widget is deployed from extensions/ to Shopify's
+// CDN, but the Test lab iframe loads /demo/assets/rfi-widget.js — if a dev
+// edits the extension and forgets to run `npm run demo:assets`, the Test lab
+// quietly keeps showing the previous version while the real store shows the
+// fix. One source of truth prevents the drift.
 Route::get('/admin/lab-frame.html', function () {
+    foreach (['rfi-widget.js', 'rfi-widget.css', 'rfi-die3d.js'] as $file) {
+        $src = base_path("extensions/roll-for-it/assets/{$file}");
+        $dst = public_path("demo/assets/{$file}");
+        if (is_file($src) && (! is_file($dst) || filemtime($src) > filemtime($dst))) {
+            @copy($src, $dst);
+        }
+    }
+
     $widget = public_path('demo/assets/rfi-widget.js');
     $version = is_file($widget) ? (string) filemtime($widget) : (string) time();
 

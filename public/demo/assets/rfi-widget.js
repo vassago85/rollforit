@@ -551,20 +551,22 @@
      */
     renderEmailForm(error, prefill) {
       const value = esc(prefill || this.pendingEmail || '');
+      // Use <div>, not <form>: on cart pages the widget is often injected inside
+      // the theme's <form action="/cart">, and HTML parsers silently drop nested
+      // <form> elements — which left button clicks submitting the parent cart
+      // form (page reload) and the widget's own submit listener never attached.
       this.body.innerHTML = ''
         + '<p class="rfi-label">Enter your email to roll</p>'
         + '<p class="rfi-note">We send you a 6-digit code to confirm it. No spam, used only to issue your prize.</p>'
-        + '<form class="rfi-email-form" novalidate>'
+        + '<div class="rfi-email-form">'
         +   '<input type="email" class="rfi-email" name="email" autocomplete="email" required placeholder="you@example.com" value="' + value + '" />'
         +   (error ? '<p class="rfi-error" role="alert">' + esc(error) + '</p>' : '')
-        +   '<button type="submit" class="rfi-roll">Send me a code</button>'
-        + '</form>';
+        +   '<button type="button" class="rfi-roll">Send me a code</button>'
+        + '</div>';
 
-      const form = this.body.querySelector('.rfi-email-form');
-      const input = form.querySelector('.rfi-email');
-      const button = form.querySelector('.rfi-roll');
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
+      const input = this.body.querySelector('.rfi-email');
+      const button = this.body.querySelector('.rfi-roll');
+      const submit = () => {
         if (this.busy) return;
         const email = (input.value || '').trim();
         if (!EMAIL_RX.test(email)) {
@@ -575,7 +577,9 @@
         button.disabled = true;
         button.textContent = 'Sending…';
         this.sendCode(email);
-      });
+      };
+      button.addEventListener('click', (e) => { e.preventDefault(); submit(); });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
       input.focus();
     }
 
@@ -608,24 +612,24 @@
      * we flip to the pick form.
      */
     renderCodeForm(error) {
+      // See renderEmailForm: <div> + type="button" avoids nested-form breakage
+      // when the widget mounts inside the theme's cart <form>.
       this.body.innerHTML = ''
         + '<p class="rfi-label">Check your inbox</p>'
         + '<p class="rfi-note">We sent a 6-digit code to <b>' + esc(this.pendingEmail) + '</b>. Enter it below to roll.</p>'
-        + '<form class="rfi-code-form" novalidate>'
+        + '<div class="rfi-code-form">'
         +   '<input type="text" class="rfi-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="\\d{6}" required placeholder="123456" />'
         +   (error ? '<p class="rfi-error" role="alert">' + esc(error) + '</p>' : '')
-        +   '<button type="submit" class="rfi-roll">Confirm</button>'
-        + '</form>'
+        +   '<button type="button" class="rfi-roll">Confirm</button>'
+        + '</div>'
         + '<p class="rfi-note rfi-code-resend">Did not get it? '
         +   '<a href="#" class="rfi-link-resend">Resend code</a> &middot; '
         +   '<a href="#" class="rfi-link-change">Change email</a>'
         + '</p>';
 
-      const form = this.body.querySelector('.rfi-code-form');
-      const input = form.querySelector('.rfi-code');
-      const button = form.querySelector('.rfi-roll');
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
+      const input = this.body.querySelector('.rfi-code');
+      const button = this.body.querySelector('.rfi-roll');
+      const submit = () => {
         if (this.busy) return;
         const code = (input.value || '').trim();
         if (!/^\d{6}$/.test(code)) {
@@ -636,7 +640,9 @@
         button.disabled = true;
         button.textContent = 'Confirming…';
         this.submitCode(code);
-      });
+      };
+      button.addEventListener('click', (e) => { e.preventDefault(); submit(); });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
       this.body.querySelector('.rfi-link-resend').addEventListener('click', (e) => {
         e.preventDefault();
         if (this.busy) return;
@@ -714,16 +720,22 @@
     }
 
     updateButton() {
-      const button = this.body && this.body.querySelector('.rfi-roll');
+      // Only the pick form has the number grid + min-spend hint. On the email or
+      // code form the .rfi-roll button is the Mailgun submit — we must not touch
+      // its disabled state (that's owned by submit()) and .rfi-min won't exist.
+      if (!this.body || !this.body.querySelector('.rfi-grid')) return;
+      const button = this.body.querySelector('.rfi-roll');
       if (!button) return;
       const min = this.body.querySelector('.rfi-min');
       const have = this.cart ? qualifying(this.cart) : 0;
       const short = this.status.min_order - have;
-      if (this.cart && short > 0) {
-        min.hidden = false;
-        min.textContent = this.status.spend_to_roll + '. Add ' + money(short) + ' more.';
-      } else {
-        min.hidden = true;
+      if (min) {
+        if (this.cart && short > 0) {
+          min.hidden = false;
+          min.textContent = this.status.spend_to_roll + '. Add ' + money(short) + ' more.';
+        } else {
+          min.hidden = true;
+        }
       }
       button.disabled = this.busy || !this.cart || short > 0 || !this.picked;
     }
