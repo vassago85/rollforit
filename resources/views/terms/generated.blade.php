@@ -12,9 +12,14 @@
 
 <h3>2. When it runs</h3>
 <p>
-    The promotion runs on {{ $daysText }} from {{ $settings->start_time }} to {{ $settings->end_time }}
-    ({{ $shop->timezone }} time). Each of these days is a "promo day". The promoter's server clock decides
-    whether the promotion is open.
+    @if ($scheduleMode === 'dates')
+        The promotion runs on {{ $promoDatesText }} from {{ $settings->start_time }} to {{ $settings->end_time }}
+        ({{ $shop->timezone }} time). Each of these dates is a "promo day".
+    @else
+        The promotion runs on {{ $daysText }} from {{ $settings->start_time }} to {{ $settings->end_time }}
+        ({{ $shop->timezone }} time). Each of these days is a "promo day".
+    @endif
+    The promoter's server clock decides whether the promotion is open.
 </p>
 
 <h3>3. How to enter</h3>

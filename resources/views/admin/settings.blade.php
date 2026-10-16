@@ -24,6 +24,11 @@
 
     <s-section heading="When it runs">
         <s-stack gap="base">
+            <s-select id="schedule_mode" data-field="schedule_mode" label="Schedule" details="Weekly repeats every chosen day of the week. Specific dates runs only on the calendar dates you list.">
+                <s-option value="weekly">Weekly (every chosen day of the week)</s-option>
+                <s-option value="dates">Specific dates (campaign)</s-option>
+            </s-select>
+
             <s-choice-list id="promo_days" data-field="promo_days" label="Promo days" multiple>
                 <s-choice value="1">Monday</s-choice>
                 <s-choice value="2">Tuesday</s-choice>
@@ -33,6 +38,19 @@
                 <s-choice value="6">Saturday</s-choice>
                 <s-choice value="7">Sunday</s-choice>
             </s-choice-list>
+
+            <div id="promo_dates_group" hidden>
+                <s-stack gap="base">
+                    <s-text font-weight="bold">Promo dates</s-text>
+                    <s-text color="subdued">Pick each calendar date the promo should run on. Dates in the past are ignored until you add a new one.</s-text>
+                    <div id="promo_dates_list" style="display:grid;gap:8px"></div>
+                    <s-stack direction="inline" gap="base">
+                        <s-date-field id="promo_date_new" label="Add a date"></s-date-field>
+                        <s-button id="promo_date_add" variant="secondary">Add date</s-button>
+                    </s-stack>
+                </s-stack>
+            </div>
+
             <s-stack direction="inline" gap="base">
                 <s-text-field id="start_time" data-field="start_time" label="Start time" placeholder="08:00" details="24-hour time"></s-text-field>
                 <s-text-field id="end_time" data-field="end_time" label="End time" placeholder="20:00" details="24-hour time"></s-text-field>
@@ -194,6 +212,10 @@
   const BOOLS = ['enabled', 'sound_enabled', 'celebration_enabled', 'show_countdown', 'pos_enabled'];
   let state = null;
   let collections = [];
+  // Live-edited copy of the promo-dates list. We keep it as a separate module
+  // state (rather than reading inputs on save) so adding/removing dates and
+  // re-rendering the rows doesn't throw away in-flight edits.
+  let promoDates = [];
   let previewUrl = null;
 
   function render(data) {
@@ -203,6 +225,10 @@
     BOOLS.forEach((k) => { el(k).checked = !!f[k]; });
     el('odds_mode').value = f.odds_mode;
     el('dice_count').value = String(f.dice_count || 1);
+    el('schedule_mode').value = f.schedule_mode || 'weekly';
+    promoDates = Array.isArray(f.promo_dates) ? [...f.promo_dates] : [];
+    renderPromoDates();
+    applyScheduleMode();
     el('promo_days').querySelectorAll('s-choice').forEach((c) => {
       c.selected = f.promo_days.includes(Number(c.getAttribute('value')));
     });
@@ -303,9 +329,61 @@
     TEXT.forEach((k) => { const v = el(k).value; body[k] = v === '' ? null : v; });
     BOOLS.forEach((k) => { body[k] = !!el(k).checked; });
     body.odds_mode = el('odds_mode').value;
+    body.schedule_mode = el('schedule_mode').value || 'weekly';
     body.promo_days = (el('promo_days').values || []).map(Number);
+    // Server dedupes + sorts, but we strip blanks here so a half-filled row
+    // doesn't produce a validation error the merchant can't see.
+    body.promo_dates = promoDates.filter((d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
     body.excluded_collections = collections;
     return body;
+  }
+
+  function applyScheduleMode() {
+    const dates = el('schedule_mode').value === 'dates';
+    el('promo_days').hidden = dates;
+    el('promo_dates_group').hidden = !dates;
+  }
+
+  function renderPromoDates() {
+    const host = el('promo_dates_list');
+    if (!host) return;
+    host.innerHTML = '';
+    if (!promoDates.length) {
+      host.innerHTML = '<s-text color="subdued">No dates yet. Pick one below and click <b>Add date</b>.</s-text>';
+      return;
+    }
+    // Rendered as plain rows so re-rendering (after add/remove) doesn't need
+    // to teach the Shopify Polaris date-field how to be re-parented safely.
+    [...promoDates].sort().forEach((date, idx) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:8px;align-items:end';
+      row.innerHTML =
+        '<s-text font-weight="bold" style="min-width:140px">' + esc(date) + '</s-text>' +
+        '<s-button data-remove="' + esc(date) + '" variant="tertiary">Remove</s-button>';
+      host.appendChild(row);
+    });
+    host.querySelectorAll('[data-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        promoDates = promoDates.filter((d) => d !== btn.getAttribute('data-remove'));
+        renderPromoDates();
+      });
+    });
+  }
+
+  function addPromoDate() {
+    const field = el('promo_date_new');
+    const value = field && field.value ? String(field.value) : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      toast('Pick a valid date first.', true);
+      return;
+    }
+    if (promoDates.includes(value)) {
+      toast('That date is already on the list.', true);
+      return;
+    }
+    promoDates = [...promoDates, value];
+    if (field) field.value = '';
+    renderPromoDates();
   }
 
   async function load() {
@@ -347,6 +425,8 @@
   }
 
   el('save').addEventListener('click', save);
+  el('schedule_mode').addEventListener('change', applyScheduleMode);
+  el('promo_date_add').addEventListener('click', addPromoDate);
   ['example_cart', 'max_payout', 'max_payout_percent', 'odds_n', 'odds_mode'].forEach((id) => {
     el(id).addEventListener('input', updateLive);
     el(id).addEventListener('change', updateLive);

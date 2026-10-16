@@ -43,7 +43,11 @@ class TermsService
                 $missing[] = $label;
             }
         }
-        if (empty($settings->promo_days)) {
+        if ($settings->isDatesSchedule()) {
+            if (empty($settings->promo_dates)) {
+                $missing[] = 'Promo dates';
+            }
+        } elseif (empty($settings->promo_days)) {
             $missing[] = 'Promo days';
         }
 
@@ -53,7 +57,13 @@ class TermsService
     public function render(Shop $shop, ShopSettings $settings): string
     {
         $symbol = Money::symbolFor($shop->currency);
-        $days = PromoWindow::dayNames($settings->promo_days ?? []);
+        // Weekly: "Monday, Wednesday and Friday"; dates: a sorted calendar list like
+        // "30 November 2026, 24 December 2026 and 2 January 2027". The terms page
+        // reads whichever is relevant so the shopper always sees the real schedule.
+        $days = $settings->isDatesSchedule()
+            ? []
+            : PromoWindow::dayNames($settings->promo_days ?? []);
+        $promoDates = self::formatPromoDates($settings->promo_dates ?? [], $shop->timezone);
         [$pickMin, $pickMax] = $settings->pickRange();
         $diceCount = (int) $settings->dice_count;
         // "the die" / "the dice" and "a number from 1 to 10" / "a sum from 2 to 12"
@@ -66,8 +76,11 @@ class TermsService
         return View::make('terms.generated', [
             'shop' => $shop,
             'settings' => $settings,
+            'scheduleMode' => $settings->isDatesSchedule() ? 'dates' : 'weekly',
             'days' => $days,
             'daysText' => self::joinList($days),
+            'promoDates' => $promoDates,
+            'promoDatesText' => self::joinList($promoDates),
             'minOrder' => Money::format($settings->min_order, $symbol),
             'maxPayout' => Money::format($settings->max_payout, $symbol),
             'maxPayoutPercent' => $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
@@ -284,5 +297,31 @@ class TermsService
         $last = array_pop($items);
 
         return implode(', ', $items).' and '.$last;
+    }
+
+    /**
+     * Turn ['2026-11-30', '2026-12-24'] into ['30 November 2026', '24 December 2026'],
+     * dropping anything that's not a valid date and sorting chronologically so the
+     * terms always read in calendar order regardless of input order.
+     *
+     * @param  array<int, mixed>  $dates
+     * @return list<string>
+     */
+    public static function formatPromoDates(array $dates, string $timezone): array
+    {
+        $parsed = [];
+        foreach ($dates as $raw) {
+            if (! is_string($raw) || $raw === '') {
+                continue;
+            }
+            try {
+                $parsed[] = \Carbon\CarbonImmutable::parse($raw, $timezone)->startOfDay();
+            } catch (\Throwable) {
+                // Bad data in the JSON column: skip silently rather than blowing up terms rendering.
+            }
+        }
+        usort($parsed, fn ($a, $b) => $a <=> $b);
+
+        return array_values(array_map(fn ($d) => $d->translatedFormat('j F Y'), $parsed));
     }
 }

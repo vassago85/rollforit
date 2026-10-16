@@ -34,7 +34,33 @@ class PromoWindow
     {
         $local = ($at ?? $this->now())->setTimezone($this->timezone);
 
+        if ($this->settings->isDatesSchedule()) {
+            return in_array($local->toDateString(), $this->promoDates(), true);
+        }
+
         return in_array($local->dayOfWeekIso, array_map('intval', $this->settings->promo_days ?? []), true);
+    }
+
+    /**
+     * Sorted, deduped list of configured calendar dates (ISO yyyy-mm-dd).
+     * Only meaningful when the shop is in dates mode; weekly shops return [].
+     *
+     * @return list<string>
+     */
+    public function promoDates(): array
+    {
+        if (! $this->settings->isDatesSchedule()) {
+            return [];
+        }
+
+        $dates = array_values(array_filter(array_map(
+            fn ($d) => is_string($d) ? trim($d) : null,
+            $this->settings->promo_dates ?? [],
+        )));
+        $dates = array_values(array_unique($dates));
+        sort($dates);
+
+        return $dates;
     }
 
     /**
@@ -65,12 +91,36 @@ class PromoWindow
     }
 
     /**
-     * Start of the next promo window strictly after $at, looking up to a week ahead.
-     * With $skipToday, today's window is ignored even if it hasn't started (used once today is spent).
+     * Start of the next promo window strictly after $at. Weekly mode scans up
+     * to a week ahead; dates mode walks the merchant's configured list in
+     * order (so a shop can be dark for six months and we'll still find the
+     * next event). With $skipToday, today's window is ignored even if it has
+     * not started yet — used once today's budget / cap is spent.
      */
     public function nextOpening(?CarbonImmutable $at = null, bool $skipToday = false): ?CarbonImmutable
     {
         $at = ($at ?? $this->now())->setTimezone($this->timezone);
+
+        if ($this->settings->isDatesSchedule()) {
+            $today = $at->toDateString();
+            foreach ($this->promoDates() as $date) {
+                if ($date < $today) {
+                    continue;
+                }
+                if ($skipToday && $date === $today) {
+                    continue;
+                }
+                $window = $this->windowFor($date);
+                if ($window === null) {
+                    return null;
+                }
+                if ($window[0]->greaterThan($at)) {
+                    return $window[0];
+                }
+            }
+
+            return null;
+        }
 
         for ($offset = $skipToday ? 1 : 0; $offset <= 7; $offset++) {
             $day = $at->startOfDay()->addDays($offset);
@@ -103,6 +153,19 @@ class PromoWindow
     public function previousPromoDate(?CarbonImmutable $at = null): ?string
     {
         $at = ($at ?? $this->now())->setTimezone($this->timezone);
+
+        if ($this->settings->isDatesSchedule()) {
+            $today = $at->toDateString();
+            // Dates list is sorted ascending; walk from the end for the most recent past date.
+            foreach (array_reverse($this->promoDates()) as $date) {
+                if ($date < $today) {
+                    return $date;
+                }
+            }
+
+            return null;
+        }
+
         $days = array_map('intval', $this->settings->promo_days ?? []);
         if ($days === []) {
             return null;

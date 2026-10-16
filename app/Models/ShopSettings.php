@@ -18,12 +18,18 @@ class ShopSettings extends Model
 
     public const TERMS_OWN = 'own';
 
+    public const SCHEDULE_WEEKLY = 'weekly';
+
+    public const SCHEDULE_DATES = 'dates';
+
     protected $table = 'shop_settings';
 
     protected $guarded = ['id', 'shop_id'];
 
     protected $attributes = [
         'promo_days' => '[]',
+        'promo_dates' => '[]',
+        'schedule_mode' => self::SCHEDULE_WEEKLY,
         'excluded_collections' => '[]',
         'odds_mode' => self::MODE_GUARANTEED,
         'odds_n' => 10,
@@ -43,6 +49,7 @@ class ShopSettings extends Model
             'odds_n' => 'integer',
             'dice_count' => 'integer',
             'promo_days' => 'array',
+            'promo_dates' => 'array',
             'min_order' => 'integer',
             'max_payout' => 'integer',
             'max_payout_percent' => 'integer',
@@ -107,8 +114,14 @@ class ShopSettings extends Model
         if (! $this->hasPublishedTerms()) {
             $blockers[] = 'Publish a terms page.';
         }
-        if (empty($this->promo_days) || ! $this->start_time || ! $this->end_time) {
+        if (! $this->start_time || ! $this->end_time) {
             $blockers[] = 'Choose promo days and times.';
+        } elseif ($this->isWeeklySchedule() && empty($this->promo_days)) {
+            $blockers[] = 'Choose promo days and times.';
+        } elseif ($this->isDatesSchedule() && empty($this->promo_dates)) {
+            // Dates mode with no dates means "campaign exists but has no runs scheduled" —
+            // same shape of problem as weekly with no days ticked.
+            $blockers[] = 'Add at least one promo date.';
         }
 
         return $blockers;
@@ -117,5 +130,15 @@ class ShopSettings extends Model
     public function canEnable(): bool
     {
         return $this->enableBlockers() === [];
+    }
+
+    public function isWeeklySchedule(): bool
+    {
+        return $this->schedule_mode !== self::SCHEDULE_DATES;
+    }
+
+    public function isDatesSchedule(): bool
+    {
+        return $this->schedule_mode === self::SCHEDULE_DATES;
     }
 }

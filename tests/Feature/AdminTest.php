@@ -90,6 +90,38 @@ it('exchanges the ID token for an offline token on first load', function () {
         && (string) $r['expiring'] === '1');
 });
 
+it('saves a campaign-mode schedule as a list of specific dates and reads it back sorted', function () {
+    $shop = makeShop();
+    fakeShopify(); // schedule_mode flips a TERMS_FIELD so settings save triggers a terms republish
+
+    admin($shop)->putJson('/api/admin/settings', settingsForm([
+        'schedule_mode' => 'dates',
+        'promo_dates' => ['2026-12-24', '2026-11-30', '2027-01-02'], // deliberately out of order
+    ]))->assertOk()
+        ->assertJsonPath('form.schedule_mode', 'dates')
+        // Server sorts so the merchant and the storefront widget both see a canonical list.
+        ->assertJsonPath('form.promo_dates', ['2026-11-30', '2026-12-24', '2027-01-02']);
+});
+
+it('rejects duplicate promo dates with a per-field validation error', function () {
+    $shop = makeShop();
+
+    admin($shop)->putJson('/api/admin/settings', settingsForm([
+        'schedule_mode' => 'dates',
+        'promo_dates' => ['2026-11-30', '2026-11-30'],
+    ]))->assertStatus(422)->assertJsonValidationErrors(['promo_dates.1']);
+});
+
+it('blocks enabling the promotion in dates mode with no promo dates listed', function () {
+    $shop = makeShop();
+
+    admin($shop)->putJson('/api/admin/settings', settingsForm([
+        'schedule_mode' => 'dates',
+        'promo_dates' => [],
+        'enabled' => true,
+    ]))->assertStatus(422)->assertJsonValidationErrors(['enabled']);
+});
+
 it('cannot enable the promotion without min_order, max_payout and a published terms page', function () {
     $shop = makeShop(['enabled' => false, 'terms_url' => null, 'terms_published_at' => null]);
 

@@ -18,8 +18,8 @@ class SettingsService
     private const MONEY_FIELDS = ['min_order', 'max_payout', 'daily_budget'];
 
     private const TERMS_FIELDS = [
-        'promo_days', 'start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent', 'daily_budget',
-        'max_winners_per_day', 'excluded_collections', 'odds_mode', 'odds_n', 'dice_count',
+        'schedule_mode', 'promo_days', 'promo_dates', 'start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent',
+        'daily_budget', 'max_winners_per_day', 'excluded_collections', 'odds_mode', 'odds_n', 'dice_count',
         'promoter_name', 'promoter_registration_number', 'promoter_address', 'promoter_email', 'promoter_phone',
     ];
 
@@ -38,8 +38,16 @@ class SettingsService
             'odds_mode' => ['required', 'in:'.ShopSettings::MODE_GUARANTEED.','.ShopSettings::MODE_CHANCE],
             'odds_n' => ['required', 'integer', 'min:2', 'max:1000'],
             'dice_count' => ['sometimes', 'integer', 'in:1,2'],
+            // Weekly: tick days of the week. Dates: list specific calendar dates (campaign mode).
+            // Both arrays are always "present" so the UI can send empty arrays when the mode
+            // doesn't need them; the mode gates whether an empty array is a blocker (see model).
+            'schedule_mode' => ['sometimes', 'in:'.ShopSettings::SCHEDULE_WEEKLY.','.ShopSettings::SCHEDULE_DATES],
             'promo_days' => ['present', 'array'],
             'promo_days.*' => ['integer', 'between:1,7', 'distinct'],
+            // Optional so existing merchants on weekly schedules can save without the field;
+            // the normaliser below defaults it to [].
+            'promo_dates' => ['sometimes', 'array', 'max:366'],
+            'promo_dates.*' => ['date_format:Y-m-d', 'distinct'],
             'start_time' => ['nullable', 'date_format:H:i', 'required_with:end_time'],
             'end_time' => ['nullable', 'date_format:H:i', 'required_with:start_time'],
             'min_order' => ['required', ...$money, 'not_regex:/^0+(\.0+)?$/'],
@@ -104,6 +112,9 @@ class SettingsService
         }
         $data['promo_days'] = array_values(array_map('intval', $data['promo_days']));
         sort($data['promo_days']);
+        $data['promo_dates'] = array_values(array_unique(array_map('strval', $data['promo_dates'] ?? [])));
+        sort($data['promo_dates']);
+        $data['schedule_mode'] = $data['schedule_mode'] ?? $settings->schedule_mode ?? ShopSettings::SCHEDULE_WEEKLY;
         $data['excluded_collections'] = array_values(array_map(
             fn ($c) => ['id' => $c['id'], 'title' => $c['title'] ?? null],
             $data['excluded_collections'],
@@ -145,7 +156,9 @@ class SettingsService
                 'odds_mode' => $settings->odds_mode,
                 'odds_n' => (int) $settings->odds_n,
                 'dice_count' => (int) $settings->dice_count,
+                'schedule_mode' => $settings->schedule_mode ?: ShopSettings::SCHEDULE_WEEKLY,
                 'promo_days' => array_map('intval', $settings->promo_days ?? []),
+                'promo_dates' => array_values(array_map('strval', $settings->promo_dates ?? [])),
                 'start_time' => $settings->start_time,
                 'end_time' => $settings->end_time,
                 'min_order' => $settings->min_order !== null ? Money::toDecimal($settings->min_order) : null,

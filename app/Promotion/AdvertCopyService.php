@@ -127,7 +127,15 @@ class AdvertCopyService
     public function values(Shop $shop, ShopSettings $settings): array
     {
         $symbol = Money::symbolFor($shop->currency);
-        $days = PromoWindow::dayNames($settings->promo_days ?? []);
+        // Weekly: {day} = "Friday", {days} = "Fridays"; dates: both read as the
+        // literal calendar list ("30 November 2026, 24 December 2026") so a
+        // campaign advert never says "on Mondays" when the campaign is really a
+        // one-off date — merchants have been caught by that before.
+        $days = $settings->isDatesSchedule()
+            ? []
+            : PromoWindow::dayNames($settings->promo_days ?? []);
+        $dateList = TermsService::formatPromoDates($settings->promo_dates ?? [], $shop->timezone);
+        $dateJoined = TermsService::joinList($dateList);
         $n = (int) $settings->odds_n;
         $diceCount = (int) $settings->dice_count;
         [$pickMin, $pickMax] = $settings->pickRange();
@@ -142,8 +150,8 @@ class AdvertCopyService
                 : 'up to '.$maxPayout);
 
         return [
-            'day' => TermsService::joinList($days),
-            'days' => TermsService::joinList(array_map(fn ($d) => $d.'s', $days)),
+            'day' => $settings->isDatesSchedule() ? $dateJoined : TermsService::joinList($days),
+            'days' => $settings->isDatesSchedule() ? $dateJoined : TermsService::joinList(array_map(fn ($d) => $d.'s', $days)),
             'start_time' => (string) $settings->start_time,
             'end_time' => (string) $settings->end_time,
             'min_order' => $settings->min_order ? Money::format($settings->min_order, $symbol) : '',
