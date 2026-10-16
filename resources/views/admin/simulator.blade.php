@@ -317,6 +317,21 @@
   el('lab-customer').addEventListener('change', deal);
   el('lab-streak').addEventListener('change', deal);
 
+  // Shopify Admin is a SPA and happily keeps this page's DOM alive when the
+  // merchant navigates away and back (or into a modal). Without this, state
+  // stays frozen from first load — a dice_count change made elsewhere never
+  // reaches the Test lab until a hard reload. Re-fetch on every return.
+  async function refreshIfStale() {
+    if (document.visibilityState !== 'visible') return;
+    try {
+      state = await api('GET', 'simulator');
+      setCaps();
+      if (frame && !frame.hidden) send({ type: 'config', config: frameConfig() });
+    } catch (e) { /* keep last state so a transient blip doesn't blank the lab */ }
+  }
+  document.addEventListener('visibilitychange', refreshIfStale);
+  window.addEventListener('pageshow', (e) => { if (e.persisted) refreshIfStale(); });
+
   hangLights();
   load();
 })();
