@@ -318,6 +318,89 @@ it('includes recent email verification attempts in the reporting payload', funct
         ->and($payload['recent'][2]['success'])->toBeTrue();
 });
 
+/* Rolls store only an email hash (POPIA), so the Rolls today table used to
+ * show no identifying info — merchants had to cross-reference the discount
+ * code with the orders list to figure out "who was that". We now rehash the
+ * emails in the verify-attempt audit table and attach the plaintext back
+ * onto each row. Three distinct states must come through so the UI can
+ * render them differently: plaintext present, guest (no email captured),
+ * and "aged-out" (we had a hash but the audit row has been pruned). */
+it('attaches the plaintext email to every roll row that still has an audit record for it', function () {
+    $shop = makeShop();
+    $today = now('Africa/Johannesburg')->toDateString();
+
+    $base = [
+        'shop_id' => $shop->id, 'promo_date' => $today,
+        'cart_subtotal' => 80000, 'eligible_subtotal' => 80000,
+        'picked_number' => 1, 'displayed_number' => 7,
+        'won' => false, 'payout' => 0,
+        'channel' => Roll::CHANNEL_ONLINE,
+    ];
+
+    // Identified shopper — plaintext should flow through from the audit.
+    Roll::create(array_merge($base, [
+        'email_hash' => EmailHasher::hash('alice@example.com'),
+        'discount_code' => 'ROLL-IDENT123',
+    ]));
+    EmailVerifyAttempt::create([
+        'shop_id' => $shop->id, 'email' => 'alice@example.com',
+        'action' => 'verify', 'outcome' => 'confirmed',
+    ]);
+
+    // Guest roll — email_hash is null, so has_email must be false.
+    Roll::create(array_merge($base, [
+        'email_hash' => null, 'ip' => '198.51.100.9',
+        'discount_code' => 'ROLL-GUEST123',
+    ]));
+
+    // Rolled identity we can no longer resolve — hash present, but no audit
+    // row exists (the attempt has aged past the retention window). has_email
+    // stays true but the plaintext is null so the UI shows an em dash, not
+    // "Guest" — that distinction matters to the merchant.
+    Roll::create(array_merge($base, [
+        'email_hash' => EmailHasher::hash('bob@example.com'),
+        'discount_code' => 'ROLL-AGED1234',
+    ]));
+
+    $recent = admin($shop)->getJson('/api/admin/reporting')->assertOk()->json('recent');
+    $byCode = collect($recent)->keyBy('code');
+
+    expect($byCode['ROLL-IDENT123']['email'])->toBe('alice@example.com')
+        ->and($byCode['ROLL-IDENT123']['has_email'])->toBeTrue()
+        ->and($byCode['ROLL-GUEST123']['email'])->toBeNull()
+        ->and($byCode['ROLL-GUEST123']['has_email'])->toBeFalse()
+        ->and($byCode['ROLL-AGED1234']['email'])->toBeNull()
+        ->and($byCode['ROLL-AGED1234']['has_email'])->toBeTrue();
+});
+
+/* Shop isolation on the lookup: a verify attempt from shop B must never
+ * surface a plaintext email on shop A's rolls, even if the two shops have
+ * a shopper with the same email. The hash is deterministic (same pepper)
+ * so without a shop_id filter the lookup would cross-pollinate. */
+it('does not leak another shop\'s plaintext emails into the recent-rolls lookup', function () {
+    $shopA = makeShop();
+    $shopB = makeShop();
+
+    Roll::create([
+        'shop_id' => $shopA->id,
+        'email_hash' => EmailHasher::hash('shared@example.com'),
+        'promo_date' => now('Africa/Johannesburg')->toDateString(),
+        'cart_subtotal' => 80000, 'eligible_subtotal' => 80000,
+        'picked_number' => 1, 'displayed_number' => 7,
+        'won' => false, 'payout' => 0, 'channel' => Roll::CHANNEL_ONLINE,
+        'discount_code' => 'ROLL-SHOPASIDE',
+    ]);
+    EmailVerifyAttempt::create([
+        'shop_id' => $shopB->id, 'email' => 'shared@example.com',
+        'action' => 'verify', 'outcome' => 'confirmed',
+    ]);
+
+    $row = collect(admin($shopA)->getJson('/api/admin/reporting')->assertOk()->json('recent'))
+        ->firstWhere('code', 'ROLL-SHOPASIDE');
+
+    expect($row['email'])->toBeNull()->and($row['has_email'])->toBeTrue();
+});
+
 it('does not leak another shop\'s verify attempts into reporting', function () {
     $shopA = makeShop();
     $shopB = makeShop();

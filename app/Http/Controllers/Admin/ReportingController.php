@@ -9,6 +9,7 @@ use App\Models\PrivacyRequest;
 use App\Models\Roll;
 use App\Models\Shop;
 use App\Promotion\DayStats;
+use App\Promotion\EmailHasher;
 use App\Promotion\PromoMetricsService;
 use App\Promotion\PromoWindow;
 use App\Shopify\Exceptions\ShopifyApiException;
@@ -62,29 +63,44 @@ class ReportingController extends Controller
         $recent = Roll::where('shop_id', $shop->id)
             ->whereDate('promo_date', $today)
             ->when($channel, fn ($q) => $q->where('channel', $channel))
-            ->orderByDesc('id')->limit(200)->get()
-            ->map(fn (Roll $r) => [
-                'time' => $r->created_at->setTimezone($shop->timezone)->format('H:i:s'),
-                'won' => $r->won,
-                'channel' => $r->channel,
-                'payout_formatted' => $r->won ? Money::format($r->payout, $symbol) : '',
-                'cart_formatted' => Money::format($r->cart_subtotal, $symbol),
-                'picked' => $r->picked_number,
-                'displayed' => $r->displayed_number,
-                'code' => $r->discount_code,
-                'code_status' => $r->code_status,
-                'test' => $r->is_test,
-                // Null for losing rolls and for winning rolls whose code has not
-                // been used in a paid order yet. The UI shows "Redeemed Rxyz" on
-                // winners with a value, "Not redeemed yet" on winners without.
-                'redeemed_at' => $r->redeemed_at?->setTimezone($shop->timezone)->format('H:i:s'),
-                'redeemed_amount' => $r->redeemed_amount !== null ? (int) $r->redeemed_amount : null,
-                'redeemed_amount_formatted' => $r->redeemed_amount !== null ? Money::format((int) $r->redeemed_amount, $symbol) : null,
-                // true/false/null — see RedemptionTracker::emailsMatch(). The UI
-                // only highlights explicit false (confirmed-different-email); it
-                // doesn't nag when the comparison was impossible (null).
-                'redeemed_email_matched' => $r->redeemed_email_matched,
-            ]);
+            ->orderByDesc('id')->limit(200)->get();
+
+        // Rolls store only an email hash (POPIA). The plaintext still lives in
+        // email_verify_attempts for the retention window, so we rehash each
+        // distinct email once and build a hash→plaintext lookup. Rolls older
+        // than the retention window simply show no email, which is fine — the
+        // audit trail is the source of truth, not the roll row.
+        $hashLookup = $this->emailHashLookup($shop);
+
+        $recent = $recent->map(fn (Roll $r) => [
+            'time' => $r->created_at->setTimezone($shop->timezone)->format('H:i:s'),
+            'won' => $r->won,
+            'channel' => $r->channel,
+            'payout_formatted' => $r->won ? Money::format($r->payout, $symbol) : '',
+            'cart_formatted' => Money::format($r->cart_subtotal, $symbol),
+            'picked' => $r->picked_number,
+            'displayed' => $r->displayed_number,
+            'code' => $r->discount_code,
+            'code_status' => $r->code_status,
+            'test' => $r->is_test,
+            // Null for losing rolls and for winning rolls whose code has not
+            // been used in a paid order yet. The UI shows "Redeemed Rxyz" on
+            // winners with a value, "Not redeemed yet" on winners without.
+            'redeemed_at' => $r->redeemed_at?->setTimezone($shop->timezone)->format('H:i:s'),
+            'redeemed_amount' => $r->redeemed_amount !== null ? (int) $r->redeemed_amount : null,
+            'redeemed_amount_formatted' => $r->redeemed_amount !== null ? Money::format((int) $r->redeemed_amount, $symbol) : null,
+            // true/false/null — see RedemptionTracker::emailsMatch(). The UI
+            // only highlights explicit false (confirmed-different-email); it
+            // doesn't nag when the comparison was impossible (null).
+            'redeemed_email_matched' => $r->redeemed_email_matched,
+            // Plaintext email for display, pulled from email_verify_attempts
+            // (same data the merchant already sees in the Email verification
+            // attempts section). Null for guests and for rolls whose verify
+            // attempt has been pruned — has_email lets the UI tell those
+            // two cases apart (merchant cares: "guest" vs "data aged out").
+            'has_email' => $r->email_hash !== null,
+            'email' => $r->email_hash !== null ? ($hashLookup[$r->email_hash] ?? null) : null,
+        ]);
 
         $channelBreakdown = Roll::where('shop_id', $shop->id)
             ->whereDate('promo_date', $today)
@@ -282,5 +298,33 @@ class ReportingController extends Controller
     private function shop(Request $request): Shop
     {
         return $request->attributes->get('shop');
+    }
+
+    /**
+     * Build a hash→plaintext email lookup from the shop's verify-attempt audit
+     * table. We walk the distinct emails and re-apply EmailHasher::hash so the
+     * caller can map a roll's email_hash straight back to the email the shopper
+     * typed into the widget. Scoped to the shop and (for safety on busy stores)
+     * to the retention window plus a day of headroom. One query, in-memory hash.
+     *
+     * @return array<string, string>
+     */
+    private function emailHashLookup(Shop $shop): array
+    {
+        $retention = (int) config('shopify.retention.verify_attempt_days', 30);
+        $since = CarbonImmutable::now()->subDays($retention + 1);
+
+        $emails = EmailVerifyAttempt::where('shop_id', $shop->id)
+            ->where('created_at', '>=', $since)
+            ->whereNotNull('email')
+            ->distinct()
+            ->pluck('email');
+
+        $lookup = [];
+        foreach ($emails as $email) {
+            $lookup[EmailHasher::hash($email)] = $email;
+        }
+
+        return $lookup;
     }
 }

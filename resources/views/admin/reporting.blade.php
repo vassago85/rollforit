@@ -79,6 +79,7 @@
         <s-table>
             <s-table-header-row>
                 <s-table-header>Time</s-table-header>
+                <s-table-header>Email</s-table-header>
                 <s-table-header>Channel</s-table-header>
                 <s-table-header>Cart</s-table-header>
                 <s-table-header>Picked</s-table-header>
@@ -190,13 +191,23 @@
       return out;
     };
 
+    // Email cell: plaintext when we can pull it from the verify-attempt audit
+    // table, a muted "Guest" for IP-only rolls (POS or guest-widget), and a
+    // muted em dash for rolls whose verify attempt has aged out of the window.
+    const emailCell = (r) => {
+      if (r.email) return esc(r.email);
+      if (!r.has_email) return '<s-text color="subdued">Guest</s-text>';
+      return '<s-text color="subdued">—</s-text>';
+    };
+
     el('recent').innerHTML = d.recent.length ? d.recent.map((r) => row([
       esc(r.time),
+      emailCell(r),
       '<s-badge tone="' + (r.channel === 'pos' ? 'info' : 'neutral') + '">' + (r.channel === 'pos' ? 'In-store' : 'Online') + '</s-badge>',
       esc(r.cart_formatted), r.picked, r.displayed,
       resultCell(r),
       esc(r.code || '') + (r.won && r.code_status !== 'created' && r.channel !== 'pos' ? ' <s-badge tone="critical">' + esc(r.code_status) + '</s-badge>' : (r.channel === 'pos' ? '<s-text color="subdued">(applied in-store)</s-text>' : '')),
-    ])).join('') : empty(7, 'No rolls yet today');
+    ])).join('') : empty(8, 'No rolls yet today');
 
     // Channel summary: for each channel show rolls, winners, prizes ISSUED and
     // prizes CONVERTED. The two amounts answer different merchant questions —
