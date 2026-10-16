@@ -76,17 +76,23 @@ class SimulatorController extends Controller
             $stats = new DayStats(rolls: 12, winners: 3, payout: 3 * (int) $settings->max_payout);
         }
 
+        $status = WidgetStatus::payload(
+            shop: $shop,
+            settings: $settings,
+            window: $window,
+            reason: null,
+            next: $settings->show_countdown ? $window->nextOpening(skipToday: true) : null,
+            test: false,
+            loggedIn: false,
+            stats: $stats,
+        );
+        // The admin Test lab stubs the /roll proxy inside the merchant's own browser,
+        // so the Mailgun email-confirmation step would just get in the way. Short-circuit
+        // it here rather than making every lab tester click through a code.
+        $status['requires_email_verification'] = false;
+
         return [
-            'status' => WidgetStatus::payload(
-                shop: $shop,
-                settings: $settings,
-                window: $window,
-                reason: null,
-                next: $settings->show_countdown ? $window->nextOpening(skipToday: true) : null,
-                test: false,
-                loggedIn: false,
-                stats: $stats,
-            ),
+            'status' => $status,
             'example_social_proof' => $exampleStats,
         ];
     }

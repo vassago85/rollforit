@@ -4,12 +4,14 @@ use App\Models\Roll;
 use App\Promotion\EmailHasher;
 use App\Promotion\IdentityHasher;
 
-it('lets a first-time guest roll even with no history', function () {
+it('lets a first-time shopper roll even with no history', function () {
+    // The default rollPayload email is pre-verified in makeShop(), so this
+    // simulates a brand-new confirmed shopper on their first visit.
     $shop = makeShop();
     fakeShopify([1 => ['price' => '600.00']]);
 
     test()->withHeaders(['Accept' => 'application/json', 'X-Forwarded-For' => '198.51.100.60'])
-        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload())
         ->assertOk();
 });
 

@@ -23,6 +23,7 @@ class RollService
         private readonly OddsAllocator $allocator,
         private readonly DiscountCodeService $discounts,
         private readonly RollFulfillment $fulfillment,
+        private readonly MerchantNotifier $notifier,
     ) {}
 
     /**
@@ -106,6 +107,12 @@ class RollService
             }
 
             return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $roll), repeat: true);
+        }
+
+        if ($roll->wasRecentlyCreated) {
+            // Fires the merchant win mail and the one-off budget-depleted mail. Safe to call
+            // on every fresh roll: the notifier filters tests, non-wins, and already-sent dates.
+            $this->notifier->rollLanded($shop, $settings, $roll);
         }
 
         return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $roll), repeat: ! $roll->wasRecentlyCreated);

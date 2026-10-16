@@ -135,7 +135,8 @@ it('enforces the one-roll-per-day rule across online and in-store with the same 
     forceNextWin($shop);
     fakeShopify([1 => ['price' => '600.00']]);
 
-    // Online roll first.
+    // Online roll first (pre-verify buyer's email because the Mailgun gate guards /roll).
+    preVerifyEmail($shop, 'buyer@example.com');
     $online = roll($shop, ['email' => 'buyer@example.com'])->assertOk()->json();
     expect($online['won'])->toBeTrue();
 

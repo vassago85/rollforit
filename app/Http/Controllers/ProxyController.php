@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Shop;
 use App\Promotion\DayStats;
+use App\Promotion\EmailVerification;
 use App\Promotion\Exceptions\PayoutGuardViolation;
 use App\Promotion\Exceptions\RollRejected;
+use App\Promotion\Exceptions\VerificationRejected;
 use App\Promotion\IdentityHasher;
 use App\Promotion\PreviewLinks;
 use App\Promotion\PromoWindow;
@@ -38,6 +40,10 @@ class ProxyController extends Controller
                 $reason = 'closed';
             } elseif (! $window->isOpen()) {
                 $reason = 'upcoming';
+                // Still surface today's winners + total paid: when the window has
+                // closed for the day (either sold out earlier or past end_time),
+                // the customer should see "R4,500 given away today, 3 winners".
+                $stats = DayStats::for($shop->id, $window->promoDate());
             } else {
                 $stats = DayStats::for($shop->id, $window->promoDate());
                 if ($stats->closedReason($settings) !== null) {
@@ -84,7 +90,7 @@ class ProxyController extends Controller
         ));
     }
 
-    public function roll(Request $request, RollService $rolls): JsonResponse
+    public function roll(Request $request, RollService $rolls, EmailVerification $verification): JsonResponse
     {
         $customerId = $request->attributes->get('logged_in_customer_id');
         // Accept the widest range here; RollService re-validates against the shop's dice_count.
@@ -101,12 +107,26 @@ class ProxyController extends Controller
 
         $shop = $this->shop($request);
         $ip = $request->attributes->get('customer_ip');
+        $settings = $shop->settingsOrCreate();
+        $window = new PromoWindow($settings, $shop->timezone);
+        $isTest = PreviewLinks::isValid($settings, $data['preview'] ?? null);
 
-        if (! $customerId && empty($data['email']) && ! $ip) {
-            return $this->noStore([
-                'error' => 'identity',
-                'message' => 'We could not verify this connection. Please try again.',
-            ], 422);
+        // A signed-in Shopify customer is already verified by Shopify; a merchant
+        // in test mode bypasses the challenge; everyone else must present an email
+        // we've just confirmed via Mailgun.
+        if (! $customerId && ! $isTest) {
+            if (empty($data['email'])) {
+                return $this->noStore([
+                    'error' => 'email_required',
+                    'message' => 'Enter your email to roll.',
+                ], 422);
+            }
+            if (! $verification->isVerified($shop, $data['email'], $window->promoDate())) {
+                return $this->noStore([
+                    'error' => 'email_not_verified',
+                    'message' => 'Please confirm your email before rolling.',
+                ], 403);
+            }
         }
 
         try {
@@ -134,6 +154,65 @@ class ProxyController extends Controller
         }
 
         return $this->noStore($result);
+    }
+
+    /**
+     * Issue a one-time 6-digit confirmation code via Mailgun for the given email.
+     * Called by the storefront widget once a guest shopper types their email.
+     */
+    public function sendVerifyCode(Request $request, EmailVerification $verification): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email:rfc', 'max:254'],
+        ]);
+
+        $shop = $this->shop($request);
+        $ip = $request->attributes->get('customer_ip');
+
+        // Signed-in Shopify customers never need to confirm; short-circuit so a
+        // misbehaving widget can't spam the mailer.
+        if ($request->attributes->get('logged_in_customer_id')) {
+            return $this->noStore(['sent' => false, 'reason' => 'logged_in']);
+        }
+
+        try {
+            $result = $verification->sendCode($shop, $data['email'], $ip);
+        } catch (VerificationRejected $e) {
+            return $this->noStore(['error' => $e->reason, 'message' => $e->getMessage()], $e->status);
+        }
+
+        return $this->noStore([
+            'sent' => true,
+            'expires_at' => $result['expires_at'],
+            'cooldown_seconds' => $result['cooldown_seconds'],
+        ]);
+    }
+
+    /**
+     * Confirm a 6-digit code from the Mailgun email. On success the shopper is
+     * verified for the current promo day; the widget may now call /roll.
+     */
+    public function verifyCode(Request $request, EmailVerification $verification): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email:rfc', 'max:254'],
+            'code' => ['required', 'string', 'size:6'],
+        ]);
+
+        $shop = $this->shop($request);
+        $window = new PromoWindow($shop->settingsOrCreate(), $shop->timezone);
+
+        try {
+            $verification->verifyCode($shop, $data['email'], $data['code'], $window->promoDate());
+        } catch (VerificationRejected $e) {
+            return $this->noStore(['error' => $e->reason, 'message' => $e->getMessage()], $e->status);
+        }
+
+        return $this->noStore([
+            'verified' => true,
+            'email' => $data['email'],
+            'promo_date' => $window->promoDate(),
+        ]);
     }
 
     /**

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Operator\AuthController as OperatorAuthController;
 use App\Http\Controllers\Operator\DashboardController as OperatorDashboardController;
+use App\Http\Controllers\Operator\SettingsController as OperatorSettingsController;
 use App\Http\Controllers\Operator\ShopsController as OperatorShopsController;
 use App\Shopify\ShopDomain;
 use Illuminate\Http\Request;
@@ -45,5 +46,11 @@ Route::prefix('op')->name('op.')->group(function () {
         Route::get('/', [OperatorDashboardController::class, 'index'])->name('dashboard');
         Route::get('/shops', [OperatorShopsController::class, 'index'])->name('shops.index');
         Route::get('/shops/{shop}', [OperatorShopsController::class, 'show'])->name('shops.show');
+
+        Route::prefix('settings')->name('settings.')->group(function () {
+            Route::get('/mail', [OperatorSettingsController::class, 'mail'])->name('mail');
+            Route::post('/mail', [OperatorSettingsController::class, 'updateMail'])->name('mail.update');
+            Route::post('/mail/test', [OperatorSettingsController::class, 'testMail'])->name('mail.test');
+        });
     });
 });

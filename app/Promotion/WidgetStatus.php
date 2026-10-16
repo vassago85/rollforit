@@ -63,6 +63,10 @@ final class WidgetStatus
             'one_roll' => 'One roll per person per day.',
             'sold_out_message' => 'Today\'s prizes have all been won. Try again next promo day.',
             'logged_in' => $loggedIn,
+            // A signed-in Shopify customer is already verified by Shopify, so
+            // the widget skips the Mailgun confirmation. Guests, test previews
+            // and admin lab calls must confirm their email before rolling.
+            'requires_email_verification' => ! $loggedIn && ! $test,
             'terms_url' => $settings->terms_url,
             'min_order_formatted' => Money::format($settings->min_order, $symbol),
             'max_payout_formatted' => Money::format($settings->max_payout, $symbol),

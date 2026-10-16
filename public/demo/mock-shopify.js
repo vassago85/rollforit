@@ -58,6 +58,9 @@
       max_payout_formatted: 'R1,500',
       promo_date: new Date().toISOString().slice(0, 10),
       previous_promo_date: null,
+      // The public demo is a wind-tunnel, not a real storefront, so we skip
+      // the Mailgun email-confirmation step and let anyone play with the die.
+      requires_email_verification: false,
       today_stats: { winners: 3, total_payout: 337500, total_payout_formatted: 'R3,375', message: 'R3,375 given away today, 3 winners so far.' },
       animation: { die_color: '#1a1a1a', number_color: '#ffffff', accent_color: '#e8571a', duration_ms: 2500, sound: true, celebration: true },
       drawer_selector: null,

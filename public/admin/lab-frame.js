@@ -25,9 +25,13 @@
     };
   }
 
-  /* Seed the streak so this roll lands on the requested day count, and forget any earlier lab result. */
+  /* Seed the streak so this roll lands on the requested day count, and forget any earlier lab result.
+     The widget stores results in localStorage now (so storefront customers can't dodge the per-day
+     limit by closing the browser), so the lab clears from both stores to stay compatible with any
+     older cached asset bundle a merchant's browser might still be holding. */
   function clearTable() {
     sessionStorage.removeItem(RESULT_KEY);
+    localStorage.removeItem(RESULT_KEY);
     const before = Math.max(1, config.streak || 1) - 1;
     localStorage.setItem(STREAK_KEY, JSON.stringify({
       count: before,

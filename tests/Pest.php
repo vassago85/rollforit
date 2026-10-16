@@ -2,10 +2,12 @@
 
 use App\Models\Shop;
 use App\Models\ShopSettings;
+use App\Promotion\IdentityHasher;
 use App\Shopify\AppProxySignature;
 use Firebase\JWT\JWT;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -55,7 +57,31 @@ function makeShop(array $settings = [], array $shop = []): Shop
         'terms_published_at' => now(),
     ], $settings));
 
-    return $model->fresh();
+    $model = $model->fresh();
+
+    // Most roll tests use the default rollPayload() email. Pre-mark it as
+    // verified so individual tests don't have to walk the Mailgun code dance
+    // every time. Tests that specifically exercise the verification flow use
+    // their own emails and/or Cache::flush() in beforeEach to opt out.
+    preVerifyEmail($model, 'customer@example.com');
+
+    return $model;
+}
+
+/**
+ * Cheat-code for tests: mark an email as already-verified for a shop + promo
+ * day, bypassing the Mailgun round trip. Used by makeShop() for the default
+ * email and by individual tests that want a specific email ready to roll.
+ */
+function preVerifyEmail(Shop $shop, string $email, ?string $promoDate = null): void
+{
+    $promoDate ??= now($shop->timezone)->toDateString();
+    $hash = IdentityHasher::hashEmail($email);
+    Cache::put(
+        "verify:ok:{$shop->id}:{$hash}:{$promoDate}",
+        ['email' => $email, 'verified_at' => now()->toIso8601String()],
+        86400,
+    );
 }
 
 /**

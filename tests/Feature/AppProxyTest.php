@@ -37,7 +37,9 @@ it('rejects a replayed roll signature', function () {
     fakeShopify([1 => ['price' => '100.00']]);
     $query = proxyQuery($shop);
 
+    // First call: 422 below_min (cart R100 under R500 min).
     $this->postJson('/api/proxy/roll?'.$query, rollPayload())->assertStatus(422);
+    // Second call with the same signed query: 409 from the once-middleware.
     $this->postJson('/api/proxy/roll?'.$query, rollPayload())->assertStatus(409);
 });
 
@@ -85,37 +87,35 @@ it('lets a signed-in customer roll without an email', function () {
         ->and(\App\Models\Roll::first()->shopify_customer_hash)->toBe(\App\Promotion\IdentityHasher::hashShopifyCustomerId('4242'));
 });
 
-it('lets a guest roll with no email when an IP is present', function () {
+it('refuses a guest roll with no email even when an IP is present', function () {
+    // The widget now REQUIRES a Mailgun-confirmed email for every guest. Rolling
+    // with just an IP is the exact double-dipping loophole we closed when we
+    // added email verification, so the server must reject it outright.
     $shop = makeShop();
     forceNextWin($shop);
     fakeShopify([1 => ['price' => '600.00']]);
 
-    $result = test()->withHeaders(['Accept' => 'application/json', 'X-Forwarded-For' => '198.51.100.20'])
+    test()->withHeaders(['Accept' => 'application/json', 'X-Forwarded-For' => '198.51.100.20'])
         ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
-        ->assertOk()
-        ->json();
+        ->assertStatus(422)
+        ->assertJson(['error' => 'email_required']);
 
-    expect($result['won'])->toBeTrue()
-        ->and(\App\Models\Roll::first()->email_hash)->toBeNull()
-        ->and(\App\Models\Roll::first()->ip)->toBe('198.51.100.20');
+    expect(\App\Models\Roll::count())->toBe(0);
 });
 
-it('returns the same result if the same guest IP rolls twice', function () {
+it('refuses a guest roll with an unconfirmed email even when an IP is present', function () {
+    // Same loophole from the other direction: typing any old email without
+    // confirming the Mailgun code must not get past the gate.
     $shop = makeShop();
     forceNextWin($shop);
     fakeShopify([1 => ['price' => '600.00']]);
-    $headers = ['Accept' => 'application/json', 'X-Forwarded-For' => '198.51.100.21'];
 
-    $first = test()->withHeaders($headers)
-        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
-        ->assertOk()->json();
-    $second = test()->withHeaders($headers)
-        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
-        ->assertOk()->json();
+    test()->withHeaders(['Accept' => 'application/json', 'X-Forwarded-For' => '198.51.100.21'])
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => 'unknown-guest@example.com']))
+        ->assertStatus(403)
+        ->assertJson(['error' => 'email_not_verified']);
 
-    expect($second['repeat'])->toBeTrue()
-        ->and($second['won'])->toBe($first['won'])
-        ->and(\App\Models\Roll::count())->toBe(1);
+    expect(\App\Models\Roll::count())->toBe(0);
 });
 
 it('returns the same result if the same Shopify customer rolls twice', function () {

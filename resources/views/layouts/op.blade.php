@@ -19,6 +19,7 @@
     <nav aria-label="Sections">
       <a href="{{ route('op.dashboard') }}" @class(['active' => request()->routeIs('op.dashboard')])>Dashboard</a>
       <a href="{{ route('op.shops.index') }}" @class(['active' => request()->routeIs('op.shops.*')])>Shops</a>
+      <a href="{{ route('op.settings.mail') }}" @class(['active' => request()->routeIs('op.settings.*')])>Settings</a>
     </nav>
     <form method="post" action="{{ route('op.logout') }}">
       @csrf

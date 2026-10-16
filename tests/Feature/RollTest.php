@@ -269,6 +269,9 @@ it('rate-limits rolls by customer IP', function () {
     fakeShopify([1 => ['price' => '600.00']]);
     $ip = ['X-Forwarded-For' => '198.51.100.7, 10.0.0.1'];
 
+    foreach (range(1, 5) as $i) {
+        preVerifyEmail($shop, "c{$i}@example.com");
+    }
     foreach (range(1, 3) as $i) {
         roll($shop, ['email' => "c{$i}@example.com"], $ip)->assertOk();
     }

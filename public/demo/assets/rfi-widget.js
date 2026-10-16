@@ -15,6 +15,24 @@
   const LOCAL = window.localStorage;
   const RESULT_KEY = 'rfi_result';
   const STREAK_KEY = 'rfi_streak';
+  const VERIFY_KEY = 'rfi_verified_email'; // { email, promo_date } once the Mailgun code is confirmed
+  const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function readVerified(status) {
+    if (!status || !status.promo_date) return null;
+    try {
+      const raw = JSON.parse(LOCAL.getItem(VERIFY_KEY) || 'null');
+      if (!raw || !raw.email || !raw.promo_date) return null;
+      if (raw.promo_date !== status.promo_date) return null; // yesterday's confirmation doesn't carry over
+      return raw.email;
+    } catch (e) { return null; }
+  }
+  function writeVerified(email, promo_date) {
+    try { LOCAL.setItem(VERIFY_KEY, JSON.stringify({ email: email, promo_date: promo_date })); } catch (e) {}
+  }
+  function clearVerified() {
+    try { LOCAL.removeItem(VERIFY_KEY); } catch (e) {}
+  }
   const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* Streak lives in localStorage so it survives sessions, but holds no PII. */
@@ -80,10 +98,16 @@
   }
   const money = (cents) => 'R' + (cents / 100).toLocaleString('en-ZA', { minimumFractionDigits: cents % 100 ? 2 : 0 }).replace(/\u00a0|\s/g, ',');
 
-  function savedResult() {
+  /* Saved result lives in localStorage so closing the browser does NOT reset the lock.
+     Scoped to the server's promo_date, which naturally rolls it over on the next promo day.
+     48h backstop handles edge cases (timezone drift, late-night rolls). */
+  function savedResult(status) {
     try {
-      const saved = JSON.parse(STORE.getItem(RESULT_KEY) || 'null');
-      return saved && Date.now() - saved.at < 12 * 3600 * 1000 ? saved.result : null;
+      const saved = JSON.parse(LOCAL.getItem(RESULT_KEY) || 'null');
+      if (!saved) return null;
+      if (status && saved.promo_date && status.promo_date && saved.promo_date !== status.promo_date) return null;
+      if (Date.now() - saved.at > 48 * 3600 * 1000) return null;
+      return saved.result;
     } catch (e) { return null; }
   }
 
@@ -149,38 +173,42 @@
     };
   }
 
-  /* Two-dice fallback: a pair of d6s whose faces sum to the server's result. */
+  /* Pip grid for a d6 face. Nine cells, data-face selects which cells light up (CSS). */
+  const PIP_GRID = '<span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
+  const d6Html = (anim, extra) => '<div class="rfi-cssdie rfi-cssdie--d6' + (extra ? ' ' + extra : '') + '" style="--rfi-die:'
+    + esc(anim.die_color) + ';--rfi-num:' + esc(anim.number_color) + '">'
+    + '<div class="rfi-pips" data-face="?">' + PIP_GRID + '</div></div>';
+
+  /* Two-dice fallback: a pair of d6s whose pips sum to the server's result. */
   function cssTwoDice(stage, anim) {
-    stage.innerHTML = '<div class="rfi-twodice">'
-      + '<div class="rfi-cssdie rfi-cssdie--d6" style="--rfi-die:' + esc(anim.die_color) + ';--rfi-num:' + esc(anim.number_color) + '"><span>?</span></div>'
-      + '<div class="rfi-cssdie rfi-cssdie--d6" style="--rfi-die:' + esc(anim.die_color) + ';--rfi-num:' + esc(anim.number_color) + '"><span>?</span></div>'
-      + '</div>';
+    stage.innerHTML = '<div class="rfi-twodice">' + d6Html(anim) + d6Html(anim) + '</div>';
     const [left, right] = stage.firstChild.children;
-    const labels = [left.firstChild, right.firstChild];
-    let timer = null;
+    const pips = [left.firstChild, right.firstChild];
+    const setFace = (i, n) => pips[i].setAttribute('data-face', String(n));
     const randPair = () => [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
+    let timer = null;
     return {
       start() {
         [left, right].forEach((d) => d.classList.add('rfi-cssdie--rolling'));
         if (reduceMotion) return;
-        timer = setInterval(() => { const [a, b] = randPair(); labels[0].textContent = a; labels[1].textContent = b; }, 70);
+        timer = setInterval(() => { const [a, b] = randPair(); setFace(0, a); setFace(1, b); }, 70);
       },
       async settle(sum) {
         clearInterval(timer);
         if (!reduceMotion) {
           for (const delay of [90, 130, 180]) {
             const [a, b] = randPair();
-            labels[0].textContent = a; labels[1].textContent = b;
+            setFace(0, a); setFace(1, b);
             await sleep(delay);
           }
         }
         const [a, b] = splitTwoDice(sum);
-        labels[0].textContent = a; labels[1].textContent = b;
+        setFace(0, a); setFace(1, b);
         [left, right].forEach((d) => { d.classList.remove('rfi-cssdie--rolling'); d.classList.add('rfi-cssdie--landed'); });
       },
       show(sum) {
         const [a, b] = splitTwoDice(sum);
-        labels[0].textContent = a; labels[1].textContent = b;
+        setFace(0, a); setFace(1, b);
         [left, right].forEach((d) => d.classList.add('rfi-cssdie--landed'));
       },
       stop() { clearInterval(timer); [left, right].forEach((d) => d.classList.remove('rfi-cssdie--rolling')); },
@@ -326,6 +354,8 @@
       this.picked = null;
       this.cart = null;
       this.busy = false;
+      this.verifiedEmail = null; // set once the Mailgun code is confirmed for this promo day
+      this.pendingEmail = null;  // email currently waiting for its 6-digit code
       host.__rfi = this;
     }
 
@@ -337,11 +367,13 @@
       this.host.hidden = false;
       this.renderShell();
       if (!status.open) this.startCountdown();
-      const saved = status.test ? null : savedResult();
+      this.verifiedEmail = status.requires_email_verification ? readVerified(status) : null;
+      const saved = status.test ? null : savedResult(status);
       if (saved) this.showResult(saved, false);
       else if (status.reason === 'upcoming') this.renderUpcoming();
       else if (status.reason === 'sold_out') this.body.innerHTML = '<p class="rfi-msg">' + esc(status.sold_out_message) + '</p>';
       else if (status.reason === 'owed') this.renderOwed();
+      else if (status.requires_email_verification && !this.verifiedEmail) this.renderEmailForm();
       else this.renderForm();
       this.refreshCart();
       if ('IntersectionObserver' in window && wants3D()) {
@@ -359,8 +391,17 @@
       const streakText = streakBadge(readStreak().count);
       const streakHtml = streakText ? '<span class="rfi-streak">' + esc(streakText) + '</span>' : '';
       const testBadge = s.test ? ' <span class="rfi-test">Test mode</span>' : '';
-      const socialHtml = s.today_stats && s.today_stats.message
-        ? '<p class="rfi-social"><span class="rfi-social-dot" aria-hidden="true"></span>' + esc(s.today_stats.message) + '</p>'
+      // Today's winners + total paid out, surfaced as a stand-out stats card so the
+      // numbers (amount, count) read at a glance instead of being buried in a sentence.
+      const stats = s.today_stats;
+      const socialHtml = stats && stats.winners > 0
+        ? '<div class="rfi-social" role="status">'
+          + '<span class="rfi-social-dot" aria-hidden="true"></span>'
+          + '<span class="rfi-social-amount">' + esc(stats.total_payout_formatted) + '</span>'
+          + '<span class="rfi-social-label">given away today</span>'
+          + '<span class="rfi-social-sep" aria-hidden="true">&middot;</span>'
+          + '<span class="rfi-social-count"><b>' + stats.winners + '</b> ' + (stats.winners === 1 ? 'winner' : 'winners') + ' so far</span>'
+          + '</div>'
         : '';
       this.host.innerHTML = '<div class="rfi-card" style="--rfi-accent:' + esc(a.accent_color) + '">'
         + '<p class="rfi-banner">' + banner + '</p>'
@@ -377,10 +418,7 @@
     renderUpcoming() {
       const a = this.status.animation;
       const teaser = this.status.dice_count === 2
-        ? '<div class="rfi-twodice">'
-          + '<div class="rfi-cssdie rfi-cssdie--d6 rfi-cssdie--idle" style="--rfi-die:' + esc(a.die_color) + ';--rfi-num:' + esc(a.number_color) + '"><span>?</span></div>'
-          + '<div class="rfi-cssdie rfi-cssdie--d6 rfi-cssdie--idle" style="--rfi-die:' + esc(a.die_color) + ';--rfi-num:' + esc(a.number_color) + '"><span>?</span></div>'
-          + '</div>'
+        ? '<div class="rfi-twodice">' + d6Html(a, 'rfi-cssdie--idle') + d6Html(a, 'rfi-cssdie--idle') + '</div>'
         : '<div class="rfi-cssdie rfi-cssdie--idle" style="--rfi-die:' + esc(a.die_color) + ';--rfi-num:' + esc(a.number_color) + '"><span>?</span></div>';
       this.body.innerHTML = '<div class="rfi-stage rfi-stage--teaser" aria-hidden="true">' + teaser + '</div>'
         + '<p class="rfi-msg">The dice are resting. Rolling opens ' + esc(this.status.next_roll.label) + '.</p>';
@@ -418,7 +456,7 @@
         timer.innerHTML = clock(left);
         if (left === 0 && !this.busy) {
           this.stopCountdown();
-          STORE.removeItem(RESULT_KEY);
+          LOCAL.removeItem(RESULT_KEY);
           this.init(true);
         }
       };
@@ -457,6 +495,146 @@
     stopCountdown() {
       clearInterval(this.countdown);
       this.countdown = null;
+    }
+
+    /**
+     * Step 1: ask for an email. The widget blocks /roll until the shopper
+     * confirms a 6-digit code we send through Mailgun. Logged-in Shopify
+     * customers skip this entirely (status.requires_email_verification is false).
+     */
+    renderEmailForm(error, prefill) {
+      const value = esc(prefill || this.pendingEmail || '');
+      this.body.innerHTML = ''
+        + '<p class="rfi-label">Enter your email to roll</p>'
+        + '<p class="rfi-note">We send you a 6-digit code to confirm it. No spam, used only to issue your prize.</p>'
+        + '<form class="rfi-email-form" novalidate>'
+        +   '<input type="email" class="rfi-email" name="email" autocomplete="email" required placeholder="you@example.com" value="' + value + '" />'
+        +   (error ? '<p class="rfi-error" role="alert">' + esc(error) + '</p>' : '')
+        +   '<button type="submit" class="rfi-roll">Send me a code</button>'
+        + '</form>';
+
+      const form = this.body.querySelector('.rfi-email-form');
+      const input = form.querySelector('.rfi-email');
+      const button = form.querySelector('.rfi-roll');
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (this.busy) return;
+        const email = (input.value || '').trim();
+        if (!EMAIL_RX.test(email)) {
+          this.renderEmailForm('That email does not look right. Please check and try again.', email);
+          return;
+        }
+        this.busy = true;
+        button.disabled = true;
+        button.textContent = 'Sending…';
+        this.sendCode(email);
+      });
+      input.focus();
+    }
+
+    async sendCode(email) {
+      let data = null, httpOk = false;
+      try {
+        const res = await fetch(this.cfg.proxy + '/email/send-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ email: email }),
+        });
+        httpOk = res.ok;
+        data = await json(res);
+      } catch (e) {
+        this.busy = false;
+        this.renderEmailForm('We could not reach the store. Please try again.', email);
+        return;
+      }
+      this.busy = false;
+      if (!httpOk) {
+        this.renderEmailForm((data && data.message) || 'We could not send a code just now. Please try again.', email);
+        return;
+      }
+      this.pendingEmail = email;
+      this.renderCodeForm();
+    }
+
+    /**
+     * Step 2: the shopper types the 6-digit code from their inbox. On success
+     * we flip to the pick form.
+     */
+    renderCodeForm(error) {
+      this.body.innerHTML = ''
+        + '<p class="rfi-label">Check your inbox</p>'
+        + '<p class="rfi-note">We sent a 6-digit code to <b>' + esc(this.pendingEmail) + '</b>. Enter it below to roll.</p>'
+        + '<form class="rfi-code-form" novalidate>'
+        +   '<input type="text" class="rfi-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="\\d{6}" required placeholder="123456" />'
+        +   (error ? '<p class="rfi-error" role="alert">' + esc(error) + '</p>' : '')
+        +   '<button type="submit" class="rfi-roll">Confirm</button>'
+        + '</form>'
+        + '<p class="rfi-note rfi-code-resend">Did not get it? '
+        +   '<a href="#" class="rfi-link-resend">Resend code</a> &middot; '
+        +   '<a href="#" class="rfi-link-change">Change email</a>'
+        + '</p>';
+
+      const form = this.body.querySelector('.rfi-code-form');
+      const input = form.querySelector('.rfi-code');
+      const button = form.querySelector('.rfi-roll');
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (this.busy) return;
+        const code = (input.value || '').trim();
+        if (!/^\d{6}$/.test(code)) {
+          this.renderCodeForm('Enter the 6-digit code from your email.');
+          return;
+        }
+        this.busy = true;
+        button.disabled = true;
+        button.textContent = 'Confirming…';
+        this.submitCode(code);
+      });
+      this.body.querySelector('.rfi-link-resend').addEventListener('click', (e) => {
+        e.preventDefault();
+        if (this.busy) return;
+        this.busy = true;
+        this.sendCode(this.pendingEmail);
+      });
+      this.body.querySelector('.rfi-link-change').addEventListener('click', (e) => {
+        e.preventDefault();
+        this.pendingEmail = null;
+        this.renderEmailForm();
+      });
+      input.focus();
+    }
+
+    async submitCode(code) {
+      let data = null, httpOk = false;
+      try {
+        const res = await fetch(this.cfg.proxy + '/email/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ email: this.pendingEmail, code: code }),
+        });
+        httpOk = res.ok;
+        data = await json(res);
+      } catch (e) {
+        this.busy = false;
+        this.renderCodeForm('We could not reach the store. Please try again.');
+        return;
+      }
+      this.busy = false;
+      if (!httpOk) {
+        const err = data && data.error;
+        if (err === 'code_expired' || err === 'too_many_attempts') {
+          // The code is dead; send the shopper back to the email step.
+          this.renderEmailForm((data && data.message) || 'That code is no longer valid. Please request a new one.', this.pendingEmail);
+          return;
+        }
+        this.renderCodeForm((data && data.message) || 'That code is not right. Please check your inbox and try again.');
+        return;
+      }
+      this.verifiedEmail = this.pendingEmail;
+      this.pendingEmail = null;
+      writeVerified(this.verifiedEmail, this.status.promo_date);
+      this.renderForm();
+      this.refreshCart();
     }
 
     renderForm(error) {
@@ -537,6 +715,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify({
+            email: this.verifiedEmail || null,
             picked_number: this.picked,
             lines: (this.cart.items || []).map((i) => ({ variant_id: i.variant_id, quantity: i.quantity })),
             cart_token: this.cart.token,
@@ -545,8 +724,21 @@
           }),
         });
         const data = await json(res);
-        if (res.ok) result = data;
-        else error = data.message || (data.errors && Object.values(data.errors)[0][0]) || 'Something went wrong. Please try again.';
+        if (res.ok) {
+          result = data;
+        } else if (data && (data.error === 'email_required' || data.error === 'email_not_verified')) {
+          // Server dropped the verification (cache cleared, promo rolled over, etc.).
+          // Reset local state and send the shopper back to the email step.
+          sound.stop();
+          die.dispose && die.dispose();
+          clearVerified();
+          this.verifiedEmail = null;
+          this.busy = false;
+          this.renderEmailForm(data.message || 'Please confirm your email before rolling.');
+          return;
+        } else {
+          error = data.message || (data.errors && Object.values(data.errors)[0][0]) || 'Something went wrong. Please try again.';
+        }
       } catch (e) {
         error = 'We could not reach the store. Please try again.';
       }
@@ -565,7 +757,7 @@
       await die.settle(result.displayed_number);
       sound.stop();
       this.busy = false;
-      if (!result.test) STORE.setItem(RESULT_KEY, JSON.stringify({ at: Date.now(), result }));
+      if (!result.test) LOCAL.setItem(RESULT_KEY, JSON.stringify({ at: Date.now(), promo_date: this.status.promo_date, result }));
       this.showResult(result, true, die, sound);
     }
 
@@ -573,7 +765,9 @@
       const anim = this.status.animation;
       if (!die) {
         this.body.innerHTML = '<div class="rfi-stage" aria-hidden="true"></div>';
-        cssDie(this.body.querySelector('.rfi-stage'), anim).show(result.displayed_number);
+        const stage = this.body.querySelector('.rfi-stage');
+        const renderer = this.status.dice_count === 2 ? cssTwoDice(stage, anim) : cssDie(stage, anim);
+        renderer.show(result.displayed_number);
       }
       const stageHtml = this.body.querySelector('.rfi-stage');
       this.body.innerHTML = '';

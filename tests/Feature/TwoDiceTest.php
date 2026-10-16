@@ -16,7 +16,7 @@ it('accepts a two-dice pick in range (2-12)', function () {
     fakeShopify([1 => ['price' => '600.00']]);
 
     $result = test()
-        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null, 'picked_number' => 12]))
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['picked_number' => 12]))
         ->assertOk()
         ->json();
 
@@ -29,7 +29,7 @@ it('rejects a pick outside the two-dice range', function () {
     fakeShopify([1 => ['price' => '600.00']]);
 
     test()
-        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null, 'picked_number' => 1]))
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['picked_number' => 1]))
         ->assertStatus(422)
         ->assertJson(['error' => 'currency']);
 
@@ -42,7 +42,7 @@ it('loses to a face inside the two-dice range when the roll misses', function ()
     fakeShopify([1 => ['price' => '600.00']]);
 
     test()
-        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null, 'picked_number' => 7]))
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['picked_number' => 7]))
         ->assertOk();
 
     $roll = Roll::first();
