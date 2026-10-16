@@ -64,7 +64,8 @@ class PromoMetricsService
             ->where('is_test', false)
             ->get(['email_hash', 'won', 'payout', 'discount_code']);
 
-        $rollerHashes = array_flip($rolls->pluck('email_hash')->all());
+        // Guest rolls store a null email_hash (IP identity only); array_flip chokes on nulls.
+        $rollerHashes = array_flip(array_filter($rolls->pluck('email_hash')->all()));
         $payoutByCode = [];
         foreach ($rolls->where('won', true) as $roll) {
             if ($roll->discount_code) {
