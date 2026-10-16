@@ -547,14 +547,60 @@
     }
   }
 
+  /* Prefer the cart summary column (above CHECK OUT) over the line-item stack. */
+  const CART_CHECKOUT_SELS = [
+    'button[name="checkout"]',
+    'input[name="checkout"]',
+    'button[type="submit"][name="checkout"]',
+    'form[action*="/cart"] [name="checkout"]',
+    'a[href="/checkout"]',
+    'a[href$="/checkout"]',
+  ];
+  const CART_SUMMARY_SELS = [
+    '.cart__footer',
+    '.cart-footer',
+    '.cart__summary',
+    '.cart-summary',
+    '.cart__ctas',
+    '[data-cart-footer]',
+    '.cart__blocks',
+  ];
+
+  function cartSummarySlot() {
+    for (const sel of CART_CHECKOUT_SELS) {
+      const checkout = document.querySelector(sel);
+      if (!checkout) continue;
+      if (checkout.closest('cart-drawer, #CartDrawer, .cart-drawer, [id*="CartDrawer"]')) continue;
+      const parent = checkout.parentNode;
+      if (parent) return { parent, before: checkout };
+    }
+    for (const sel of CART_SUMMARY_SELS) {
+      const box = document.querySelector(sel);
+      if (!box || box.closest('cart-drawer, #CartDrawer, .cart-drawer')) continue;
+      return { parent: box, before: box.firstChild };
+    }
+    return null;
+  }
+
+  function placeOnCartPage(host) {
+    if (!host || host.dataset.rfiSummary === '1') return false;
+    const slot = cartSummarySlot();
+    if (!slot) return false;
+    host.classList.add('rfi-root--page', 'rfi-root--summary');
+    slot.parent.insertBefore(host, slot.before);
+    host.dataset.rfiSummary = '1';
+    return true;
+  }
+
   function mount(host, cfg) {
+    if (cfg.placement === 'cart') placeOnCartPage(host);
     if (host.__rfi) return;
     new Widget(host, cfg).init();
   }
 
   function mountBlocks() {
     document.querySelectorAll('[data-rfi]').forEach((host) => mount(host, {
-      proxy: host.dataset.proxy, currency: host.dataset.currency, die3d: host.dataset.die3d, placement: host.dataset.placement,
+      proxy: host.dataset.proxy, currency: host.dataset.currency, die3d: host.dataset.die3d, placement: host.dataset.placement || 'cart',
     }));
   }
 
@@ -579,15 +625,16 @@
       if (targets.length) break;
     }
 
-    if (embed.cartPageFallback && embed.template === 'cart' && !document.querySelector('[data-rfi]')) {
-      const form = document.querySelector('form[action$="/cart"], form[action*="/cart?"]');
-      if (form && !document.querySelector('.rfi-root--page')) {
-        const host = document.createElement('div');
-        host.className = 'rfi-root rfi-root--page';
-        host.hidden = true;
+    if (embed.cartPageFallback && embed.template === 'cart' && !document.querySelector('[data-rfi]') && !document.querySelector('.rfi-root--page')) {
+      const host = document.createElement('div');
+      host.className = 'rfi-root rfi-root--page';
+      host.hidden = true;
+      if (!placeOnCartPage(host)) {
+        const form = document.querySelector('form[action$="/cart"], form[action*="/cart?"]');
+        if (!form) return;
         form.parentNode.insertBefore(host, form.nextSibling);
-        mount(host, Object.assign({}, cfg, { placement: 'cart' }));
       }
+      mount(host, Object.assign({}, cfg, { placement: 'cart' }));
     }
   }
 

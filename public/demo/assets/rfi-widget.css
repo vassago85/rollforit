@@ -1,5 +1,6 @@
 .rfi-root { margin: 12px 0; max-width: 28rem; }
 .rfi-root--page { margin: 16px 0 24px; }
+.rfi-root--summary { max-width: none; width: 100%; margin: 0 0 14px; }
 .rfi-root--drawer { max-width: none; margin: 0 0 12px; }
 .rfi-root[hidden] { display: none !important; }
 
