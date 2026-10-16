@@ -54,6 +54,14 @@ class TermsService
     {
         $symbol = Money::symbolFor($shop->currency);
         $days = PromoWindow::dayNames($settings->promo_days ?? []);
+        [$pickMin, $pickMax] = $settings->pickRange();
+        $diceCount = (int) $settings->dice_count;
+        // "the die" / "the dice" and "a number from 1 to 10" / "a sum from 2 to 12"
+        // so section 3 always matches the game the storefront widget is actually playing.
+        $dicePhrase = $diceCount === 2 ? 'the dice' : 'the die';
+        $pickPhrase = $diceCount === 2
+            ? "a sum from {$pickMin} to {$pickMax}"
+            : "a number from {$pickMin} to {$pickMax}";
 
         return View::make('terms.generated', [
             'shop' => $shop,
@@ -67,6 +75,9 @@ class TermsService
             'oddsStatement' => $settings->isGuaranteed()
                 ? "One in every {$settings->odds_n} entries wins. Entries are grouped in blocks of {$settings->odds_n}, and exactly one entry in each block wins. Blocks carry over from one promo day to the next until they are complete."
                 : "Each roll has a 1 in {$settings->odds_n} chance to win, decided independently for every roll.",
+            'diceCount' => $diceCount,
+            'dicePhrase' => $dicePhrase,
+            'pickPhrase' => $pickPhrase,
             'excludedTitles' => array_values(array_filter(array_map(
                 fn ($c) => is_array($c) ? ($c['title'] ?? null) : null,
                 $settings->excluded_collections ?? [],

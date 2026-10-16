@@ -20,7 +20,7 @@
 <h3>3. How to enter</h3>
 <ul>
     <li>Add products worth at least {{ $minOrder }} to your cart. Gift cards and shipping do not count towards this amount.</li>
-    <li>On the cart page, pick a number from 1 to 10 and roll the die. If you are signed in to the store, we use your account. If you are a guest, you will be asked for an email address.</li>
+    <li>On the cart page, pick {{ $pickPhrase }} and roll {{ $dicePhrase }}. If you are signed in to the store, we use your account. If you are a guest, you will be asked for an email address.</li>
     <li>The number you pick is for fun only. It does not affect whether you win.</li>
     <li>You may roll once per promo day. The limit is enforced per store account, per email address and per phone number. If any of those has already rolled today, the earlier result applies.</li>
     <li>The promoter may limit the number of rolls from one connection to prevent abuse.</li>
@@ -30,7 +30,7 @@
 <ul>
     <li>If you are shopping in store, a staff member may offer you a roll before you pay once your sale reaches {{ $minOrder }}.</li>
     <li>You will be asked for your email address or your cell phone number. We use this only to make sure the same person does not roll twice on the same day (online and in-store entries share the same daily limit).</li>
-    <li>The in-store die is run by the promoter's server, exactly like the online version. The result is final the moment the roll is made.</li>
+    <li>The in-store {{ $diceCount === 2 ? 'dice are' : 'die is' }} run by the promoter's server, exactly like the online version. The result is final the moment the roll is made.</li>
     <li>If you win, the discount is applied to the sale on the till right away. There is no code to carry away — the win cannot be used on a future visit, cannot be split across sales and cannot be refunded for cash.</li>
     <li>Prizes won in store still come out of the same daily allocation as online wins.</li>
 </ul>

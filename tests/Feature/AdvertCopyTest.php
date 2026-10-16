@@ -104,3 +104,34 @@ it('lists what changed since the adverts were acknowledged', function () {
         ->and($changes['Maximum payout'])->toMatchArray(['from' => 'R1,000', 'to' => 'R750'])
         ->and($changes['Prize'])->toMatchArray(['from' => 'up to R1,000', 'to' => 'up to R750']);
 });
+
+it('rewrites every advert for two-dice mode', function () {
+    $blocks = collect(adverts(['dice_count' => 2, 'odds_n' => 12])['blocks'])->keyBy('key');
+
+    foreach ($blocks as $block) {
+        expect($block['error'])->toBeNull()
+            ->and($block['text'])->toContain('the dice')
+            ->and($block['text'])->not->toContain('the die')
+            // Odds sentence always mentions the (odds_n = 12) denominator in two-dice mode.
+            ->and($block['text'])->toMatch('/(One in every 12 rolls wins|1 in 12 rolls wins|1 in 12 chance)/');
+    }
+
+    expect($blocks['email']['text'])->toContain('pick a sum from 2 to 12 on the cart page')
+        ->and($blocks['short_social']['text'])->toContain('roll the dice at checkout')
+        ->and($blocks['banner']['text'])->toContain('roll the dice, win');
+});
+
+it('flags a dice-count change in the adverts changes list', function () {
+    $shop = makeShop(['promo_days' => [5]]);
+    $service = app(AdvertCopyService::class);
+    $service->acknowledge($shop, $shop->settings);
+
+    $shop->settings->forceFill(['dice_count' => 2, 'odds_n' => 12])->save();
+    $changes = collect($service->changesSinceAck($shop, $shop->settings->fresh()))->keyBy('field');
+
+    expect($changes->keys()->all())->toContain('Dice')
+        ->and($changes['Dice'])->toMatchArray([
+            'from' => 'the die (pick a number from 1 to 10)',
+            'to' => 'the dice (pick a sum from 2 to 12)',
+        ]);
+});

@@ -471,7 +471,7 @@
         + '<p class="rfi-note">' + esc(this.status.disclaimer) + '</p>'
         + '<p class="rfi-min" hidden></p>'
         + (error ? '<p class="rfi-error" role="alert">' + esc(error) + '</p>' : '')
-        + '<button type="button" class="rfi-roll" disabled>Roll the die</button>';
+        + '<button type="button" class="rfi-roll" disabled>Roll ' + (this.status.dice_count === 2 ? 'the dice' : 'the die') + '</button>';
       this.body.querySelector('.rfi-grid').addEventListener('click', (e) => {
         const b = e.target.closest('.rfi-num');
         if (!b) return;

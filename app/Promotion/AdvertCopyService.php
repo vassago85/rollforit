@@ -20,27 +20,27 @@ class AdvertCopyService
     public const TEMPLATES = [
         'short_social' => [
             'label' => 'Short social post',
-            'text' => 'Roll4It this {day}. Spend {min_order} or more at {store_name}, roll the die at checkout, and win {prize} off your order. {odds} One roll per customer per day. T&Cs: {terms_url}',
+            'text' => 'Roll4It this {day}. Spend {min_order} or more at {store_name}, roll {dice_phrase} at checkout, and win {prize} off your order. {odds} One roll per customer per day. T&Cs: {terms_url}',
         ],
         'long_social' => [
             'label' => 'Long social post',
-            'text' => "Every {day}, your order could be on us.\n\nSpend {min_order} or more at {store_name} and you get one roll of the die before you pay. Pick your number and roll. {odds_clause}, and a win takes {prize} off your order.\n\nOne roll per customer per day. Valid {day}s from {start_time} to {end_time}. Shipping and gift cards excluded.\n\nFull terms: {terms_url}",
+            'text' => "Every {day}, your order could be on us.\n\nSpend {min_order} or more at {store_name} and you get one roll of {dice_phrase} before you pay. Pick your number and roll. {odds_clause}, and a win takes {prize} off your order.\n\nOne roll per customer per day. Valid {day}s from {start_time} to {end_time}. Shipping and gift cards excluded.\n\nFull terms: {terms_url}",
         ],
         'email' => [
             'label' => 'Email subject and body',
-            'text' => "Subject: Roll the die this {day}, win {prize} off\n\nThis {day}, every order of {min_order} or more at {store_name} gets one roll of the die before payment. {odds_clause}, and a win takes {prize} off your order.\n\nHow it works: fill your cart, pick a number from 1 to 10 on the cart page and roll. If you win, the discount is applied straight away.\n\nOne roll per customer per day. Runs {day}s from {start_time} to {end_time}. Shipping and gift cards excluded.\n\nShop now: {store_url}\nFull terms: {terms_url}",
+            'text' => "Subject: Roll {dice_phrase} this {day}, win {prize} off\n\nThis {day}, every order of {min_order} or more at {store_name} gets one roll of {dice_phrase} before payment. {odds_clause}, and a win takes {prize} off your order.\n\nHow it works: fill your cart, pick {pick_phrase} on the cart page and roll. If you win, the discount is applied straight away.\n\nOne roll per customer per day. Runs {day}s from {start_time} to {end_time}. Shipping and gift cards excluded.\n\nShop now: {store_url}\nFull terms: {terms_url}",
         ],
         'whatsapp' => [
             'label' => 'WhatsApp / SMS',
-            'text' => '{store_name}: Roll4It this {day}. Spend {min_order}+, roll the die, win {prize} off. {odds_short} One roll per customer per day. T&Cs {terms_url}',
+            'text' => '{store_name}: Roll4It this {day}. Spend {min_order}+, roll {dice_phrase}, win {prize} off. {odds_short} One roll per customer per day. T&Cs {terms_url}',
         ],
         'banner' => [
             'label' => 'Website banner',
-            'text' => '{day}s only: spend {min_order}, roll the die, win {prize} off. T&Cs apply.',
+            'text' => '{day}s only: spend {min_order}, roll {dice_phrase}, win {prize} off. T&Cs apply.',
         ],
         'print' => [
             'label' => 'Print / in-store',
-            'text' => 'Roll4It every {day} at {store_url}. Spend {min_order} or more, roll the die, win {prize} off your order. {odds} One roll per customer per day. Full terms at {terms_url}',
+            'text' => 'Roll4It every {day} at {store_url}. Spend {min_order} or more, roll {dice_phrase}, win {prize} off your order. {odds} One roll per customer per day. Full terms at {terms_url}',
         ],
     ];
 
@@ -89,6 +89,7 @@ class AdvertCopyService
             'Maximum payout' => $v['max_payout'],
             'Prize' => $v['prize'],
             'Odds' => $v['odds'],
+            'Dice' => $v['dice_phrase'].' (pick '.$v['pick_phrase'].')',
             'Terms URL' => $v['terms_url'],
             'Store name' => $v['store_name'],
         ];
@@ -128,6 +129,8 @@ class AdvertCopyService
         $symbol = Money::symbolFor($shop->currency);
         $days = PromoWindow::dayNames($settings->promo_days ?? []);
         $n = (int) $settings->odds_n;
+        $diceCount = (int) $settings->dice_count;
+        [$pickMin, $pickMax] = $settings->pickRange();
 
         $guaranteed = $settings->isGuaranteed();
         $maxPayout = $settings->max_payout ? Money::format($settings->max_payout, $symbol) : '';
@@ -152,6 +155,11 @@ class AdvertCopyService
             'odds' => $guaranteed ? "One in every {$n} rolls wins." : "Each roll has a 1 in {$n} chance to win.",
             'odds_clause' => $guaranteed ? "One in every {$n} rolls wins" : "Each roll has a 1 in {$n} chance to win",
             'odds_short' => $guaranteed ? "1 in {$n} rolls wins." : "Each roll has a 1 in {$n} chance to win.",
+            // Dice-aware phrasing so switching to two dice rewrites every advert on its own.
+            'dice_phrase' => $diceCount === 2 ? 'the dice' : 'the die',
+            'pick_phrase' => $diceCount === 2
+                ? "a sum from {$pickMin} to {$pickMax}"
+                : "a number from {$pickMin} to {$pickMax}",
         ];
     }
 
