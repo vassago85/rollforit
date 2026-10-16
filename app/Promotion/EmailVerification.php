@@ -51,7 +51,10 @@ class EmailVerification
     public function sendCode(Shop $shop, string $email, ?string $ip): array
     {
         $email = IdentityHasher::normaliseEmail($email);
+        $context = ['shop_id' => $shop->id, 'email' => $email, 'ip' => $ip];
+
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->log->info('EmailVerification.sendCode rejected: invalid_email', $context);
             throw new VerificationRejected('invalid_email', 'That email does not look right. Please check and try again.');
         }
 
@@ -60,15 +63,18 @@ class EmailVerification
         $emailKey = "verify:send:email:{$shop->id}:{$emailHash}";
 
         if ($ip && RateLimiter::tooManyAttempts($burstKey, self::DAILY_SENDS_PER_IP)) {
+            $this->log->info('EmailVerification.sendCode rejected: rate_limited (ip)', $context);
             throw new VerificationRejected('rate_limited', 'Too many confirmation codes from this connection. Please try again later.', 429);
         }
         if (RateLimiter::tooManyAttempts($emailKey, self::DAILY_SENDS_PER_EMAIL)) {
+            $this->log->info('EmailVerification.sendCode rejected: rate_limited (email)', $context);
             throw new VerificationRejected('rate_limited', 'Too many confirmation codes for this email. Please try again later.', 429);
         }
 
         $cooldownKey = $this->cooldownKey($shop, $emailHash);
         $remaining = $this->cooldownSeconds($cooldownKey);
         if ($remaining > 0) {
+            $this->log->info('EmailVerification.sendCode rejected: cooldown', $context + ['cooldown_seconds' => $remaining]);
             throw new VerificationRejected('cooldown', "Please wait {$remaining} seconds before requesting another code.", 429);
         }
 
@@ -93,9 +99,12 @@ class EmailVerification
         } catch (Throwable $e) {
             // Mail transport problems should surface to the shopper (they can't verify
             // without the code) rather than being swallowed like merchant notifications.
-            $this->log->warning("EmailVerification::sendCode shop={$shop->id} failed: {$e->getMessage()}");
+            $this->log->warning('EmailVerification.sendCode mail transport failed', $context + ['error' => $e->getMessage()]);
             throw new VerificationRejected('mail_failed', 'We could not send a confirmation code just now. Please try again.', 502);
         }
+
+        // Code value itself is never logged — that's a shared secret with the shopper.
+        $this->log->info('EmailVerification.sendCode queued', $context + ['expires_at' => $expiresAt->toIso8601String()]);
 
         return [
             'expires_at' => $expiresAt->toIso8601String(),
@@ -112,7 +121,10 @@ class EmailVerification
     public function verifyCode(Shop $shop, string $email, string $code, string $promoDate): void
     {
         $email = IdentityHasher::normaliseEmail($email);
+        $context = ['shop_id' => $shop->id, 'email' => $email, 'promo_date' => $promoDate];
+
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->log->info('EmailVerification.verifyCode rejected: invalid_email', $context);
             throw new VerificationRejected('invalid_email', 'That email does not look right. Please check and try again.');
         }
 
@@ -121,12 +133,14 @@ class EmailVerification
         $entry = $this->cache->get($codeKey);
 
         if (! is_array($entry)) {
+            $this->log->info('EmailVerification.verifyCode rejected: code_expired', $context);
             throw new VerificationRejected('code_expired', 'That confirmation code has expired. Please request a new one.');
         }
 
         $attempts = (int) ($entry['attempts'] ?? 0);
         if ($attempts >= self::MAX_ATTEMPTS) {
             $this->cache->forget($codeKey);
+            $this->log->info('EmailVerification.verifyCode rejected: too_many_attempts', $context + ['attempts' => $attempts]);
             throw new VerificationRejected('too_many_attempts', 'Too many wrong codes. Please request a new one.');
         }
 
@@ -134,6 +148,7 @@ class EmailVerification
         if ($hash === '' || ! password_verify(trim($code), $hash)) {
             $entry['attempts'] = $attempts + 1;
             $this->cache->put($codeKey, $entry, self::CODE_TTL_MINUTES * 60);
+            $this->log->info('EmailVerification.verifyCode rejected: wrong_code', $context + ['attempt' => $entry['attempts']]);
             throw new VerificationRejected('wrong_code', 'That code is not right. Please check your inbox and try again.');
         }
 
@@ -143,6 +158,8 @@ class EmailVerification
             ['email' => $email, 'verified_at' => CarbonImmutable::now()->toIso8601String()],
             self::VERIFIED_TTL_HOURS * 3600,
         );
+
+        $this->log->info('EmailVerification.verifyCode confirmed', $context);
     }
 
     /**
