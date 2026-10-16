@@ -207,6 +207,38 @@ it('marks a winning roll as redeemed when the order used its code', function () 
         ->and($fresh->redeemed_amount)->toBe(50000);
 });
 
+it('flags a redeemed roll when the checkout email differs from the verified email', function () {
+    $shop = makeShop();
+    $roll = Roll::create([
+        'shop_id' => $shop->id,
+        'email_hash' => EmailHasher::hash('alice@example.com'),
+        'promo_date' => now()->toDateString(),
+        'cart_subtotal' => 80000, 'eligible_subtotal' => 80000,
+        'picked_number' => 1, 'displayed_number' => 1,
+        'won' => true, 'payout' => 50000, 'discount_code' => 'ROLL-SHAREDCD',
+        'code_status' => Roll::CODE_CREATED,
+    ]);
+
+    // Alice verified alice@example.com and won; bob@example.com checks out with her code.
+    webhook($shop, 'orders/paid', [
+        'shop_domain' => $shop->domain,
+        'admin_graphql_api_id' => 'gid://shopify/Order/9100',
+        'customer' => ['id' => 1, 'email' => 'bob@example.com'],
+        'email' => 'bob@example.com',
+        'browser_ip' => '203.0.113.9',
+        'created_at' => '2026-10-16T12:00:00Z',
+        'test' => false,
+        'discount_codes' => [['code' => 'ROLL-SHAREDCD', 'amount' => '500.00', 'type' => 'fixed_amount']],
+        'total_discounts' => '500.00',
+    ])->assertOk();
+
+    $fresh = $roll->refresh();
+    expect($fresh->redeemed_at)->not->toBeNull()
+        ->and($fresh->redeemed_order_id)->toBe('gid://shopify/Order/9100')
+        ->and($fresh->redeemed_amount)->toBe(50000)
+        ->and($fresh->redeemed_email_matched)->toBeFalse();
+});
+
 it('leaves other winning rolls untouched when the order used a different code', function () {
     $shop = makeShop();
     $redeemedRoll = Roll::create([

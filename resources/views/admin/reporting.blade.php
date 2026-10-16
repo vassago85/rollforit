@@ -178,6 +178,11 @@
       if (r.won && !r.test) {
         if (r.redeemed_at) {
           out += ' <s-badge tone="success">Redeemed ' + esc(r.redeemed_amount_formatted) + '</s-badge>';
+          // Only warn on an explicit false — a null comparison (order had no
+          // email on it) is "we don't know" and shouldn't nag the merchant.
+          if (r.redeemed_email_matched === false) {
+            out += ' <s-badge tone="critical">⚠ Different email at checkout</s-badge>';
+          }
         } else if (r.channel !== 'pos') {
           out += ' <s-badge tone="neutral">Not redeemed yet</s-badge>';
         }

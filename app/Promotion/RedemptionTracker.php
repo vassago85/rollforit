@@ -33,6 +33,13 @@ final class RedemptionTracker
      * order's discount_codes list. Returns the roll we matched, or null if
      * no roll on this shop sold this discount code.
      *
+     * `$orderEmail` is the email on the order (empty / null is fine for guest
+     * checkouts without one). When provided, we also compare it to the
+     * email_hash the shopper rolled with so merchants can see when a winning
+     * code was spent by someone OTHER than the person who rolled — the
+     * classic "shared code with a friend" abuse pattern. The result lands in
+     * the roll's `redeemed_email_matched` column: true / false / null.
+     *
      * @param  list<string>|array<array-key, string>  $discountCodes  Codes exactly as Shopify sent them.
      * @param  int  $discountApplied  Cents actually taken off the order by the code.
      */
@@ -42,6 +49,7 @@ final class RedemptionTracker
         array $discountCodes,
         int $discountApplied,
         CarbonImmutable $placedAt,
+        ?string $orderEmail = null,
     ): ?Roll {
         if ($orderId === '' || empty($discountCodes)) {
             return null;
@@ -86,8 +94,24 @@ final class RedemptionTracker
             'redeemed_at' => $placedAt,
             'redeemed_order_id' => $orderId,
             'redeemed_amount' => $amount,
+            'redeemed_email_matched' => $this->emailsMatch($roll, $orderEmail),
         ])->save();
 
         return $roll;
+    }
+
+    /**
+     * True when the order's email hashes to the same value as the roll's
+     * email_hash, false when both sides have an email but they differ, null
+     * when we can't compare (the order has no email or the roll never had one).
+     */
+    private function emailsMatch(Roll $roll, ?string $orderEmail): ?bool
+    {
+        $orderEmail = $orderEmail !== null ? trim($orderEmail) : '';
+        if ($orderEmail === '' || empty($roll->email_hash)) {
+            return null;
+        }
+
+        return hash_equals($roll->email_hash, EmailHasher::hash($orderEmail));
     }
 }

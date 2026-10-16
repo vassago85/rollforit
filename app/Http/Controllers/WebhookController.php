@@ -81,7 +81,9 @@ class WebhookController extends Controller
         // actually contained the winning code.
         $codes = $this->discountCodesFrom($request);
         $discountCents = Money::toCents((string) ($request->input('total_discounts') ?? '0')) ?? 0;
-        $redeemed = $this->redemption->markOrderRedemption($shop, $orderId, $codes, $discountCents, $placedAt);
+        $redeemed = $this->redemption->markOrderRedemption(
+            $shop, $orderId, $codes, $discountCents, $placedAt, $email !== '' ? $email : null,
+        );
 
         Log::info('Roll4It orders/paid processed', [
             'shop' => $shop->domain,

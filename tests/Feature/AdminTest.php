@@ -26,7 +26,9 @@ function settingsForm(array $overrides = []): array
         'min_order' => '500',
         'max_payout' => '1000',
         'daily_budget' => null,
-        'max_winners_per_day' => null,
+        // Keeps the default form at the runaway-payout guard's happy path.
+        // Tests that specifically assert the guard pass max_winners_per_day => null.
+        'max_winners_per_day' => '50',
         'excluded_collections' => [],
         'die_color' => '#1f2937',
         'die_number_color' => '#ffffff',
@@ -139,6 +141,51 @@ it('cannot enable the promotion without min_order, max_payout and a published te
     $shop->settings->forceFill(['terms_url' => 'https://x/pages/roll-for-it-terms', 'terms_published_at' => now()])->save();
     fakeShopify();
     admin($shop)->putJson('/api/admin/settings', settingsForm(['enabled' => true]))->assertOk()->assertJsonPath('form.enabled', true);
+});
+
+/* Guaranteed-mode blocks can roll over mid-day, so a second block that happens
+ * to put its winning_position early can mint more max_payout winners the same
+ * day. Without either a daily cash cap or a winners-per-day cap the only brake
+ * is the per-roll max, which has already produced the "wins look crazy high"
+ * complaints we saw on the dev shop. Refusing to enable until at least one
+ * cap is set is the hard guard the merchant asked for. */
+it('refuses to enable the promotion when both the daily budget and winners-per-day caps are empty', function () {
+    $shop = makeShop(['enabled' => false]);
+
+    $response = admin($shop)->putJson('/api/admin/settings', settingsForm([
+        'enabled' => true,
+        'daily_budget' => null,
+        'max_winners_per_day' => null,
+    ]))->assertStatus(422);
+
+    // The specific message is user-facing, so pin it so we don't silently soften it later.
+    expect($response->json('errors.enabled.0'))
+        ->toContain('daily budget')->toContain('winners per day');
+    expect($shop->settings->fresh()->enabled)->toBeFalse();
+});
+
+it('accepts enabling when either cap alone is set', function () {
+    $shop = makeShop(['enabled' => false]);
+    fakeShopify();
+
+    admin($shop)->putJson('/api/admin/settings', settingsForm([
+        'enabled' => true, 'daily_budget' => '10000', 'max_winners_per_day' => null,
+    ]))->assertOk()->assertJsonPath('form.enabled', true);
+
+    admin($shop)->putJson('/api/admin/settings', settingsForm([
+        'enabled' => true, 'daily_budget' => null, 'max_winners_per_day' => '25',
+    ]))->assertOk()->assertJsonPath('form.enabled', true);
+});
+
+/* enable_blockers is what the admin UI reads to render the "fix these to turn
+ * the promo on" list. Make sure the runaway-payout item shows up with the
+ * exact wording the merchant will see on screen. */
+it('exposes the runaway-payout blocker in the status payload so the UI can render the fix list', function () {
+    $shop = makeShop(['enabled' => false, 'daily_budget' => null, 'max_winners_per_day' => null]);
+
+    $blockers = admin($shop)->getJson('/api/admin/settings')->assertOk()->json('status.enable_blockers');
+
+    expect($blockers)->toContain('Set a daily budget or a maximum number of winners per day. Without one of these, a bad run could rack up unlimited payouts in a single day.');
 });
 
 it('requires max_payout to be greater than 0', function () {
@@ -340,6 +387,49 @@ it('reports redeemed vs issued separately on today, per channel, and per row', f
         ->and($byCode['ROLL-A1']['redeemed_amount_formatted'])->toBe('R500')
         ->and($byCode['ROLL-B2']['redeemed_amount'])->toBeNull()
         ->and($byCode['ROLL-B2']['redeemed_at'])->toBeNull();
+});
+
+/* The reporting payload must surface redeemed_email_matched for every recent
+ * row (null for unredeemed, true when the checkout email matched the roll
+ * email, false when they differed). The UI uses the explicit-false value to
+ * paint a "Different email at checkout" warning, so a regression here hides
+ * the code-sharing abuse signal from the merchant. */
+it('surfaces the email-match flag on each recent row so the warning badge can render', function () {
+    $shop = makeShop();
+    $today = now('Africa/Johannesburg')->toDateString();
+    $base = [
+        'shop_id' => $shop->id, 'promo_date' => $today,
+        'cart_subtotal' => 80000, 'eligible_subtotal' => 80000,
+        'picked_number' => 1, 'displayed_number' => 1,
+        'won' => true, 'code_status' => Roll::CODE_CREATED,
+        'channel' => Roll::CHANNEL_ONLINE,
+    ];
+    // Matched redemption.
+    Roll::create(array_merge($base, [
+        'email_hash' => EmailHasher::hash('alice@example.com'),
+        'payout' => 50000, 'discount_code' => 'ROLL-MATCH1',
+        'redeemed_at' => now(), 'redeemed_order_id' => 'gid://shopify/Order/1',
+        'redeemed_amount' => 50000, 'redeemed_email_matched' => true,
+    ]));
+    // Mismatched redemption — the code was spent by someone other than the roller.
+    Roll::create(array_merge($base, [
+        'email_hash' => EmailHasher::hash('bob@example.com'),
+        'payout' => 50000, 'discount_code' => 'ROLL-SHARED1',
+        'redeemed_at' => now(), 'redeemed_order_id' => 'gid://shopify/Order/2',
+        'redeemed_amount' => 50000, 'redeemed_email_matched' => false,
+    ]));
+    // Winning but not yet redeemed — flag stays null.
+    Roll::create(array_merge($base, [
+        'email_hash' => EmailHasher::hash('carol@example.com'),
+        'payout' => 50000, 'discount_code' => 'ROLL-WAITING',
+    ]));
+
+    $recent = admin($shop)->getJson('/api/admin/reporting')->assertOk()->json('recent');
+    $byCode = collect($recent)->keyBy('code');
+
+    expect($byCode['ROLL-MATCH1']['redeemed_email_matched'])->toBeTrue()
+        ->and($byCode['ROLL-SHARED1']['redeemed_email_matched'])->toBeFalse()
+        ->and($byCode['ROLL-WAITING']['redeemed_email_matched'])->toBeNull();
 });
 
 /* History rows must also carry redemption so merchants can see the gap over

@@ -131,6 +131,7 @@ class PromoMetricsService
                     (array) $order['discountCodes'],
                     $discounts,
                     $placedAt,
+                    $email !== '' ? $email : null,
                 );
             }
         }

@@ -111,6 +111,14 @@ class ShopSettings extends Model
         if (! $this->max_payout || $this->max_payout <= 0) {
             $blockers[] = 'Set a maximum payout greater than 0.';
         }
+        // At least one daily ceiling must be set. Without either a cash budget or a
+        // winners-per-day cap, guaranteed mode can book several max_payout winners
+        // in a single day whenever a block completes and reopens — the per-roll
+        // max is the only brake, so a bad run uncaps your spend. See docs on odds.
+        if ((! $this->daily_budget || $this->daily_budget <= 0)
+            && (! $this->max_winners_per_day || $this->max_winners_per_day <= 0)) {
+            $blockers[] = 'Set a daily budget or a maximum number of winners per day. Without one of these, a bad run could rack up unlimited payouts in a single day.';
+        }
         if (! $this->hasPublishedTerms()) {
             $blockers[] = 'Publish a terms page.';
         }

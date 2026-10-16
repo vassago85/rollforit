@@ -43,6 +43,7 @@ class Roll extends Model
             'fulfilled_at' => 'datetime',
             'redeemed_at' => 'datetime',
             'redeemed_amount' => 'integer',
+            'redeemed_email_matched' => 'boolean',
         ];
     }
 

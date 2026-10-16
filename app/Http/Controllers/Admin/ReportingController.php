@@ -80,6 +80,10 @@ class ReportingController extends Controller
                 'redeemed_at' => $r->redeemed_at?->setTimezone($shop->timezone)->format('H:i:s'),
                 'redeemed_amount' => $r->redeemed_amount !== null ? (int) $r->redeemed_amount : null,
                 'redeemed_amount_formatted' => $r->redeemed_amount !== null ? Money::format((int) $r->redeemed_amount, $symbol) : null,
+                // true/false/null — see RedemptionTracker::emailsMatch(). The UI
+                // only highlights explicit false (confirmed-different-email); it
+                // doesn't nag when the comparison was impossible (null).
+                'redeemed_email_matched' => $r->redeemed_email_matched,
             ]);
 
         $channelBreakdown = Roll::where('shop_id', $shop->id)

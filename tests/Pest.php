@@ -53,6 +53,10 @@ function makeShop(array $settings = [], array $shop = []): Shop
         'end_time' => '23:59',
         'min_order' => 50000,
         'max_payout' => 100000,
+        // Default to a sane daily cap so canEnable() passes. The runaway-payout
+        // guard requires at least one of daily_budget or max_winners_per_day;
+        // tests that specifically exercise the "no cap" branch pass null here.
+        'max_winners_per_day' => 50,
         'promoter_name' => 'McTactical (Pty) Ltd',
         'promoter_address' => '1 Test Street, Pretoria',
         'promoter_email' => 'promo@example.com',
