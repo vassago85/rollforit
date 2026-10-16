@@ -27,7 +27,7 @@ final class RollInput
             throw new InvalidArgumentException('POS rolls require posSubtotalCents.');
         }
         if ($this->channel === Roll::CHANNEL_ONLINE && ! $this->hasOnlineIdentity()) {
-            throw new InvalidArgumentException('Online rolls require a Shopify login or an email.');
+            throw new InvalidArgumentException('Online rolls require a Shopify login or a customer IP.');
         }
         if ($this->channel === Roll::CHANNEL_POS && ($this->email === null || $this->email === '') && ($this->phone === null || $this->phone === '')) {
             throw new InvalidArgumentException('Either email or phone must be provided.');
@@ -37,6 +37,7 @@ final class RollInput
     public function hasOnlineIdentity(): bool
     {
         return ($this->shopifyCustomerId !== null && $this->shopifyCustomerId !== '')
-            || ($this->email !== null && $this->email !== '');
+            || ($this->email !== null && $this->email !== '')
+            || ($this->ip !== null && $this->ip !== '');
     }
 }

@@ -1,0 +1,34 @@
+# Production app, installed on McTactical (mctactical-build.myshopify.com).
+# Deploy with: shopify.cmd app deploy --config production
+client_id = "f01689f3df8702f6f7522354e2784cb4"
+name = "Roll4It"
+application_url = "https://roll4it.charsleydigital.co.za"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+
+[access_scopes]
+scopes = "write_discounts,read_products,write_online_store_pages,write_app_proxy,read_orders"
+
+[auth]
+redirect_urls = []
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/api/webhooks"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/api/webhooks"
+
+[app_proxy]
+url = "https://roll4it.charsleydigital.co.za/api/proxy"
+prefix = "apps"
+subpath = "roll-for-it"
+
+[pos]
+embedded = false

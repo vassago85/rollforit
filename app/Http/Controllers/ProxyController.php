@@ -70,7 +70,7 @@ class ProxyController extends Controller
     {
         $customerId = $request->attributes->get('logged_in_customer_id');
         $data = $request->validate([
-            'email' => [$customerId ? 'nullable' : 'required', 'email:rfc', 'max:254'],
+            'email' => ['nullable', 'email:rfc', 'max:254'],
             'picked_number' => ['required', 'integer', 'between:1,10'],
             'lines' => ['required', 'array', 'min:1', 'max:'.config('shopify.roll.max_cart_lines')],
             'lines.*.variant_id' => ['required'],
@@ -81,13 +81,21 @@ class ProxyController extends Controller
         ]);
 
         $shop = $this->shop($request);
+        $ip = $request->attributes->get('customer_ip');
+
+        if (! $customerId && empty($data['email']) && ! $ip) {
+            return $this->noStore([
+                'error' => 'identity',
+                'message' => 'We could not verify this connection. Please try again.',
+            ], 422);
+        }
 
         try {
             $result = $rolls->roll($shop, new RollInput(
                 email: $data['email'] ?? null,
                 pickedNumber: (int) $data['picked_number'],
                 lines: $data['lines'],
-                ip: $request->attributes->get('customer_ip'),
+                ip: $ip,
                 shopifyCustomerId: $customerId,
                 cartToken: $data['cart_token'] ?? null,
                 currency: $data['currency'] ?? null,

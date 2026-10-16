@@ -45,12 +45,12 @@ class RollService
         if ($input->phone && ! $phoneHash) {
             throw new RollRejected(RollRejected::CURRENCY, 'That phone number does not look right. Please check and try again.');
         }
-        if (! $emailHash && ! $phoneHash && ! $customerHash) {
-            throw new RollRejected(RollRejected::CURRENCY, 'Sign in or enter an email to roll.');
+        if (! $emailHash && ! $phoneHash && ! $customerHash && ! $input->ip) {
+            throw new RollRejected(RollRejected::CURRENCY, 'We could not verify this connection. Please try again.');
         }
 
         if (! $isTest) {
-            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate);
+            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate, $input->ip);
             if ($existing) {
                 return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $existing), repeat: true);
             }
@@ -81,7 +81,7 @@ class RollService
                 $shop, $settings, $input, $priced, $emailHash, $phoneHash, $customerHash, $promoDate, $isTest, $window,
             ));
         } catch (UniqueConstraintViolationException) {
-            $roll = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate);
+            $roll = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate, $input->ip);
             if (! $roll) {
                 throw new RollRejected(RollRejected::CLOSED, 'Please try again.', 409);
             }
@@ -112,7 +112,7 @@ class RollService
         if ($isTest) {
             $won = $locked->preview_outcome === 'win';
         } else {
-            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate);
+            $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate, $input->ip);
             if ($existing) {
                 return $existing;
             }
@@ -226,16 +226,23 @@ class RollService
         ];
     }
 
-    private function existingRoll(Shop $shop, ?string $emailHash, ?string $phoneHash, ?string $customerHash, string $promoDate): ?Roll
-    {
-        if (! $emailHash && ! $phoneHash && ! $customerHash) {
+    private function existingRoll(
+        Shop $shop,
+        ?string $emailHash,
+        ?string $phoneHash,
+        ?string $customerHash,
+        string $promoDate,
+        ?string $ip = null,
+    ): ?Roll {
+        $hasNamedIdentity = $emailHash || $phoneHash || $customerHash;
+        if (! $hasNamedIdentity && ! $ip) {
             return null;
         }
 
         return Roll::where('shop_id', $shop->id)
             ->whereDate('promo_date', $promoDate)
             ->where('is_test', false)
-            ->where(function ($q) use ($emailHash, $phoneHash, $customerHash) {
+            ->where(function ($q) use ($emailHash, $phoneHash, $customerHash, $ip, $hasNamedIdentity) {
                 if ($emailHash) {
                     $q->orWhere('email_hash', $emailHash);
                 }
@@ -244,6 +251,16 @@ class RollService
                 }
                 if ($customerHash) {
                     $q->orWhere('shopify_customer_hash', $customerHash);
+                }
+                // Guests are keyed by IP for the day (one roll per connection).
+                // Only match other guest rows so a shared café IP cannot surface someone else's code.
+                if (! $hasNamedIdentity && $ip) {
+                    $q->orWhere(function ($guest) use ($ip) {
+                        $guest->where('ip', $ip)
+                            ->whereNull('email_hash')
+                            ->whereNull('phone_hash')
+                            ->whereNull('shopify_customer_hash');
+                    });
                 }
             })
             ->first();

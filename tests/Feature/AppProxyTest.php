@@ -85,14 +85,37 @@ it('lets a signed-in customer roll without an email', function () {
         ->and(\App\Models\Roll::first()->shopify_customer_hash)->toBe(\App\Promotion\IdentityHasher::hashShopifyCustomerId('4242'));
 });
 
-it('refuses a guest roll with no email', function () {
+it('lets a guest roll with no email when an IP is present', function () {
     $shop = makeShop();
+    forceNextWin($shop);
     fakeShopify([1 => ['price' => '600.00']]);
 
-    test()->withHeaders(['Accept' => 'application/json'])
+    $result = test()->withHeaders(['Accept' => 'application/json', 'X-Forwarded-For' => '198.51.100.20'])
         ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
-        ->assertStatus(422)
-        ->assertJsonValidationErrors(['email']);
+        ->assertOk()
+        ->json();
+
+    expect($result['won'])->toBeTrue()
+        ->and(\App\Models\Roll::first()->email_hash)->toBeNull()
+        ->and(\App\Models\Roll::first()->ip)->toBe('198.51.100.20');
+});
+
+it('returns the same result if the same guest IP rolls twice', function () {
+    $shop = makeShop();
+    forceNextWin($shop);
+    fakeShopify([1 => ['price' => '600.00']]);
+    $headers = ['Accept' => 'application/json', 'X-Forwarded-For' => '198.51.100.21'];
+
+    $first = test()->withHeaders($headers)
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
+        ->assertOk()->json();
+    $second = test()->withHeaders($headers)
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload(['email' => null]))
+        ->assertOk()->json();
+
+    expect($second['repeat'])->toBeTrue()
+        ->and($second['won'])->toBe($first['won'])
+        ->and(\App\Models\Roll::count())->toBe(1);
 });
 
 it('returns the same result if the same Shopify customer rolls twice', function () {

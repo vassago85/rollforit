@@ -1,48 +1,59 @@
-.rfi-root { margin: 16px 0; }
+.rfi-root { margin: 12px 0; max-width: 28rem; }
+.rfi-root--page { margin: 16px 0 24px; }
+.rfi-root--drawer { max-width: none; margin: 0 0 12px; }
 .rfi-root[hidden] { display: none !important; }
+
 .rfi-card {
-  --rfi-accent: #f59e0b;
-  border: 2px solid var(--rfi-accent);
-  border-radius: 12px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #111827;
+  --rfi-accent: #e8571a;
+  border: 0;
+  border-top: 3px solid var(--rfi-accent);
+  border-radius: 0;
+  padding: 14px 0 0;
+  background: transparent;
+  color: #111;
   font: inherit;
   text-align: left;
 }
-.rfi-banner { margin: 0 0 8px; font-weight: 600; font-size: 0.95em; }
-.rfi-banner a { color: inherit; text-decoration: underline; }
-.rfi-title { margin: 0 0 12px; font-size: 1.25em; line-height: 1.2; }
-.rfi-test { font-size: 0.6em; vertical-align: middle; background: #1d4ed8; color: #fff; border-radius: 999px; padding: 2px 8px; }
-.rfi-label { display: block; margin: 10px 0 6px; font-weight: 600; font-size: 0.9em; }
-.rfi-email { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; }
+
+.rfi-banner { margin: 0 0 6px; font-weight: 500; font-size: 0.85em; line-height: 1.4; color: #444; }
+.rfi-banner a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.rfi-title { margin: 0 0 12px; font-size: 1.35em; line-height: 1.15; font-weight: 700; letter-spacing: 0.01em; }
+.rfi-test { font-size: 0.55em; vertical-align: middle; background: #111; color: #fff; border-radius: 2px; padding: 2px 7px; margin-left: 6px; }
+.rfi-label { display: block; margin: 0 0 8px; font-weight: 600; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.06em; color: #333; }
+
 .rfi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .rfi-num {
-  padding: 10px 0; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: #111827;
-  font: inherit; font-weight: 700; cursor: pointer;
+  padding: 10px 0; border: 1px solid #d0d0d0; border-radius: 0; background: #fff; color: #111;
+  font: inherit; font-weight: 700; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
 }
-.rfi-num[aria-pressed="true"] { background: var(--rfi-accent); border-color: var(--rfi-accent); color: #111827; }
-.rfi-num:focus-visible, .rfi-roll:focus-visible, .rfi-email:focus-visible { outline: 3px solid var(--rfi-accent); outline-offset: 2px; }
-.rfi-note, .rfi-fine { margin: 8px 0 0; font-size: 0.8em; color: #4b5563; }
-.rfi-min { margin: 10px 0 0; font-weight: 600; color: #92400e; }
-.rfi-error { margin: 10px 0 0; color: #b91c1c; font-weight: 600; }
+.rfi-num:hover { border-color: #111; }
+.rfi-num[aria-pressed="true"] { background: var(--rfi-accent); border-color: var(--rfi-accent); color: #fff; }
+.rfi-num:focus-visible, .rfi-roll:focus-visible { outline: 2px solid var(--rfi-accent); outline-offset: 2px; }
+
+.rfi-note, .rfi-fine { margin: 8px 0 0; font-size: 0.78em; color: #666; line-height: 1.4; }
+.rfi-min { margin: 10px 0 0; font-weight: 600; color: #9a3412; font-size: 0.9em; }
+.rfi-error { margin: 10px 0 0; color: #b91c1c; font-weight: 600; font-size: 0.9em; }
+
 .rfi-roll {
-  display: block; width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 8px;
-  background: #111827; color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+  display: block; width: 100%; margin-top: 12px; padding: 13px 16px; border: 0; border-radius: 0;
+  background: var(--rfi-accent); color: #fff; font: inherit; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; cursor: pointer;
 }
-.rfi-roll:disabled { opacity: 0.45; cursor: not-allowed; }
+.rfi-roll:hover:not(:disabled) { filter: brightness(0.95); }
+.rfi-roll:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .rfi-msg { margin: 12px 0 0; font-weight: 600; text-align: center; }
 .rfi-msg--win { color: #166534; font-size: 1.1em; }
 .rfi-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.rfi-stage { position: relative; height: 200px; display: flex; align-items: center; justify-content: center; }
+.rfi-stage { position: relative; height: 180px; display: flex; align-items: center; justify-content: center; }
 .rfi-stage canvas { width: 100% !important; height: 100% !important; display: block; }
 
 .rfi-cssdie {
-  --rfi-die: #1f2937; --rfi-num: #fff;
-  width: 110px; height: 130px; display: flex; align-items: center; justify-content: center;
+  --rfi-die: #1a1a1a; --rfi-num: #fff;
+  width: 100px; height: 120px; display: flex; align-items: center; justify-content: center;
   background: var(--rfi-die); color: var(--rfi-num);
   clip-path: polygon(50% 0, 100% 64%, 50% 100%, 0 64%);
-  font-size: 40px; font-weight: 800; padding-top: 22px; box-sizing: border-box;
+  font-size: 36px; font-weight: 800; padding-top: 20px; box-sizing: border-box;
 }
 .rfi-cssdie--rolling { animation: rfi-tumble 0.45s linear infinite; }
 .rfi-cssdie--landed { animation: rfi-land 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -55,23 +66,23 @@
 }
 @keyframes rfi-land { from { transform: scale(0.7) rotate(-20deg); } to { transform: scale(1) rotate(0); } }
 
-.rfi-stage--teaser { height: 150px; }
+.rfi-stage--teaser { height: 130px; }
 .rfi-cssdie--idle { animation: rfi-idle 3.2s ease-in-out infinite; }
 @keyframes rfi-idle {
   0%, 100% { transform: rotate(-6deg) translateY(0); }
   50% { transform: rotate(6deg) translateY(-8px); }
 }
 
-.rfi-next { margin: 14px 0 0; padding-top: 12px; border-top: 1px dashed #d1d5db; text-align: center; }
+.rfi-next { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid #e5e5e5; text-align: center; }
 .rfi-next[hidden] { display: none; }
 .rfi-next-label { margin: 0 0 8px; font-weight: 600; }
-.rfi-timer { display: flex; justify-content: center; gap: 8px; margin: 0; font-variant-numeric: tabular-nums; }
+.rfi-timer { display: flex; justify-content: center; gap: 6px; margin: 0; font-variant-numeric: tabular-nums; }
 .rfi-t {
-  display: flex; flex-direction: column; align-items: center; min-width: 52px; padding: 6px 4px;
-  border-radius: 8px; background: var(--rfi-accent); color: #111827;
+  display: flex; flex-direction: column; align-items: center; min-width: 48px; padding: 6px 4px;
+  border-radius: 0; background: var(--rfi-accent); color: #fff;
 }
-.rfi-t b { font-size: 1.5em; line-height: 1.1; }
-.rfi-t small { font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.05em; }
+.rfi-t b { font-size: 1.35em; line-height: 1.1; }
+.rfi-t small { font-size: 0.65em; text-transform: uppercase; letter-spacing: 0.05em; }
 
 .rfi-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; }
 
@@ -80,14 +91,13 @@
   .rfi-cssdie--rolling span { opacity: 0.4; }
 }
 
-/* Sexy additions: social proof, streak, loss teaser, share, calendar. */
 .rfi-social {
-  margin: 0 0 10px; padding: 6px 10px; border-radius: 999px;
-  background: rgba(34, 197, 94, 0.12); color: #166534;
+  margin: 0 0 10px; padding: 0; border-radius: 0;
+  background: transparent; color: #166534;
   font-size: 0.82em; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
 }
 .rfi-social-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block;
+  width: 7px; height: 7px; border-radius: 50%; background: #22c55e; display: inline-block;
   box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); animation: rfi-pulse 1.6s ease-out infinite;
 }
 @keyframes rfi-pulse {
@@ -97,36 +107,36 @@
 }
 
 .rfi-streak {
-  display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px;
-  background: var(--rfi-accent); color: #111827;
-  font-size: 0.6em; font-weight: 700; letter-spacing: 0.03em; vertical-align: middle;
+  display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 0;
+  background: var(--rfi-accent); color: #fff;
+  font-size: 0.55em; font-weight: 700; letter-spacing: 0.04em; vertical-align: middle;
   text-transform: uppercase;
 }
 
 .rfi-teaser {
-  margin: 10px 0 0; padding: 10px 12px; border-radius: 8px;
-  background: rgba(245, 158, 11, 0.12); color: #78350f;
+  margin: 10px 0 0; padding: 10px 0; border-radius: 0;
+  background: transparent; color: #444;
   font-size: 0.9em; text-align: center; font-weight: 600;
+  border-top: 1px solid #e5e5e5;
 }
 
 .rfi-share { margin-top: 12px; text-align: center; }
 .rfi-share-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 14px; border-radius: 999px; border: 2px solid var(--rfi-accent);
-  background: #fff; color: #111827; font: inherit; font-weight: 700; cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease;
+  padding: 8px 14px; border-radius: 0; border: 1px solid var(--rfi-accent);
+  background: #fff; color: #111; font: inherit; font-weight: 700; cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-.rfi-share-btn::before { content: '✨'; }
-.rfi-share-btn:hover { transform: translateY(-1px); background: var(--rfi-accent); }
-.rfi-share-btn:focus-visible { outline: 3px solid var(--rfi-accent); outline-offset: 2px; }
+.rfi-share-btn:hover { background: var(--rfi-accent); color: #fff; }
+.rfi-share-btn:focus-visible { outline: 2px solid var(--rfi-accent); outline-offset: 2px; }
 
 .rfi-next-streak {
-  margin: 6px 0 0; font-size: 0.85em; color: #78350f; font-weight: 600; text-align: center;
+  margin: 6px 0 0; font-size: 0.85em; color: #9a3412; font-weight: 600; text-align: center;
 }
 .rfi-ics {
-  display: inline-block; margin-top: 10px; padding: 8px 14px; border-radius: 999px;
-  border: 1px solid #d1d5db; background: #fff; color: #111827;
+  display: inline-block; margin-top: 10px; padding: 8px 14px; border-radius: 0;
+  border: 1px solid #ccc; background: #fff; color: #111;
   font: inherit; font-size: 0.85em; font-weight: 600; cursor: pointer;
 }
-.rfi-ics:hover { border-color: var(--rfi-accent); color: #78350f; }
-.rfi-ics:focus-visible { outline: 3px solid var(--rfi-accent); outline-offset: 2px; }
+.rfi-ics:hover { border-color: var(--rfi-accent); color: var(--rfi-accent); }
+.rfi-ics:focus-visible { outline: 2px solid var(--rfi-accent); outline-offset: 2px; }

@@ -54,7 +54,7 @@ final class WidgetStatus
             'odds' => WidgetCopy::oddsStatement($settings),
             'disclaimer' => WidgetCopy::pickDisclaimer(),
             'spend_to_roll' => WidgetCopy::spendToRoll($shop, $settings),
-            'one_roll' => 'One roll per customer per day.',
+            'one_roll' => 'One roll per person per day.',
             'sold_out_message' => 'Today\'s prizes have all been won. Try again next promo day.',
             'logged_in' => $loggedIn,
             'terms_url' => $settings->terms_url,

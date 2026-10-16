@@ -59,7 +59,7 @@
       promo_date: new Date().toISOString().slice(0, 10),
       previous_promo_date: null,
       today_stats: { winners: 3, total_payout: 337500, total_payout_formatted: 'R3,375', message: 'R3,375 given away today, 3 winners so far.' },
-      animation: { die_color: '#1f2937', number_color: '#ffffff', accent_color: '#f59e0b', duration_ms: 2500, sound: true, celebration: true },
+      animation: { die_color: '#1a1a1a', number_color: '#ffffff', accent_color: '#e8571a', duration_ms: 2500, sound: true, celebration: true },
       drawer_selector: null,
     };
   }
