@@ -49,14 +49,18 @@ final class RollSimulator
         };
 
         $maxPayout = (int) $settings->max_payout;
-        $maxPercent = $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null;
+        $maxPercent = $settings->activePayoutPercent();
         $payout = $won
             ? PayoutCalculator::calculate($cartSubtotalCents, $maxPayout, $maxPercent)
             : 0;
         $won = $won && $payout > 0;
 
         $isPos = $channel === Roll::CHANNEL_POS;
-        $code = $won && ! $isPos ? 'SIM-'.self::randomCode() : null;
+        $doublePayout = $settings->isDoubleGame()
+            ? PayoutCalculator::calculate($cartSubtotalCents, $maxPayout, $settings->doublePayoutPercent())
+            : null;
+        $pending = $won && $settings->isDoubleGame() && ! $isPos && $doublePayout !== null && $doublePayout > $payout;
+        $code = $won && ! $isPos && ! $pending ? 'SIM-'.self::randomCode() : null;
 
         // Build an in-memory Roll (never saved) so WidgetCopy::resultMessage sees
         // the same model shape it would in production.
@@ -91,9 +95,17 @@ final class RollSimulator
                     ? Money::format($potentialPayout, $symbol)
                     : null,
                 'code' => $code,
-                'code_ready' => true,
+                'code_ready' => ! $pending,
                 'ends_at' => null,
-                'message' => WidgetCopy::resultMessage($shop, $settings, $roll),
+                'message' => $pending
+                    ? WidgetCopy::offerMessage($shop, $settings, $roll, (int) $doublePayout, true)
+                    : WidgetCopy::resultMessage($shop, $settings, $roll),
+                'decision' => $pending ? Roll::DECISION_PENDING : ($won && $settings->isDoubleGame() ? Roll::DECISION_TAKEN : null),
+                'offer_double' => $pending,
+                'base_percent' => (int) ($settings->base_percent ?: 5),
+                'double_percent' => (int) ($settings->double_percent ?: 10),
+                'double_payout' => $doublePayout,
+                'double_payout_formatted' => $doublePayout !== null ? Money::format($doublePayout, $symbol) : null,
                 'channel' => $channel,
             ],
             'diagnostics' => [

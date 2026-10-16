@@ -26,13 +26,25 @@ final class WidgetCopy
     {
         $n = (int) $settings->odds_n;
 
+        if ($settings->isDoubleGame() && ! $settings->isGuaranteed()) {
+            return "Pick 1 of {$n}. One of them wins.";
+        }
+
         return $settings->isGuaranteed()
             ? "One in every {$n} entries wins."
             : "Each roll has a 1 in {$n} chance to win.";
     }
 
-    public static function pickDisclaimer(): string
+    public static function pickDisclaimer(?ShopSettings $settings = null): string
     {
+        if ($settings !== null && $settings->isDoubleGame() && ! $settings->isGuaranteed()) {
+            return 'One of these is the winner. You win if you pick it.';
+        }
+
+        if ($settings !== null && $settings->isDoubleGame()) {
+            return 'Pick one. One in every '.$settings->odds_n.' entries wins, and a win shows on the choice you picked.';
+        }
+
         return 'Your number is just for fun. It does not change your odds: the result is decided when you roll.';
     }
 
@@ -40,9 +52,18 @@ final class WidgetCopy
     {
         $symbol = Money::symbolFor($shop->currency);
 
-        $cap = $settings->max_payout_percent
-            ? sprintf('up to %d%% of your cart (max %s)', (int) $settings->max_payout_percent, Money::format($settings->max_payout, $symbol))
-            : sprintf('up to %s', Money::format($settings->max_payout, $symbol));
+        if ($settings->isDoubleGame()) {
+            $cap = sprintf(
+                '%d%% of your cart, or risk it for %d%% (max %s)',
+                $settings->activePayoutPercent(),
+                $settings->doublePayoutPercent(),
+                Money::format($settings->max_payout, $symbol),
+            );
+        } else {
+            $cap = $settings->max_payout_percent
+                ? sprintf('up to %d%% of your cart (max %s)', (int) $settings->max_payout_percent, Money::format($settings->max_payout, $symbol))
+                : sprintf('up to %s', Money::format($settings->max_payout, $symbol));
+        }
 
         return sprintf(
             'Spend %s, win %s off. T&Cs apply.',
@@ -86,6 +107,22 @@ final class WidgetCopy
             '{payout}' => Money::format($roll->payout, Money::symbolFor($shop->currency)),
             '{code}' => (string) $roll->discount_code,
         ]);
+    }
+
+    public static function offerMessage(Shop $shop, ShopSettings $settings, Roll $roll, int $doublePayout, bool $offerDouble): string
+    {
+        $symbol = Money::symbolFor($shop->currency);
+        $kept = Money::format($roll->payout, $symbol);
+        $base = $settings->activePayoutPercent();
+
+        if (! $offerDouble) {
+            return "You won {$base}% ({$kept}). Take it to add the code to your cart.";
+        }
+
+        $higher = Money::format($doublePayout, $symbol);
+        $double = $settings->doublePayoutPercent();
+
+        return "You won {$base}% ({$kept}). Take it, or risk it for {$double}% ({$higher}). A miss pays nothing. Leave it and you keep {$kept}.";
     }
 
     /**

@@ -24,6 +24,14 @@ class Roll extends Model
 
     public const CHANNEL_POS = 'pos';
 
+    public const DECISION_PENDING = 'pending';
+
+    public const DECISION_TAKEN = 'taken';
+
+    public const DECISION_DOUBLED = 'doubled';
+
+    public const DECISION_BUSTED = 'busted';
+
     protected $guarded = ['id'];
 
     protected function casts(): array
@@ -39,6 +47,7 @@ class Roll extends Model
             'payout' => 'integer',
             'discount_ends_at' => 'datetime',
             'is_test' => 'boolean',
+            'decision_expires_at' => 'datetime',
             'position' => 'integer',
             'fulfilled_at' => 'datetime',
             'redeemed_at' => 'datetime',

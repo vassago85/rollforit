@@ -18,12 +18,15 @@ use Illuminate\Support\Facades\RateLimiter;
  */
 class RollService
 {
+    public const DECISION_MINUTES = 10;
+
     public function __construct(
         private readonly CartPricer $pricer,
         private readonly OddsAllocator $allocator,
         private readonly DiscountCodeService $discounts,
         private readonly RollFulfillment $fulfillment,
         private readonly MerchantNotifier $notifier,
+        private readonly Draw $draw,
     ) {}
 
     /**
@@ -54,7 +57,7 @@ class RollService
         if (! $isTest) {
             $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate, $input->ip);
             if ($existing) {
-                return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $existing), repeat: true);
+                return $this->present($shop, $settings, $this->releaseIfReady($shop, $settings, $existing), repeat: true);
             }
 
             // Repeat rollers must have completed a paid order since their previous roll.
@@ -106,16 +109,32 @@ class RollService
                 throw new RollRejected(RollRejected::CLOSED, 'Please try again.', 409);
             }
 
-            return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $roll), repeat: true);
+            return $this->present($shop, $settings, $this->releaseIfReady($shop, $settings, $roll), repeat: true);
         }
 
-        if ($roll->wasRecentlyCreated) {
-            // Fires the merchant win mail and the one-off budget-depleted mail. Safe to call
-            // on every fresh roll: the notifier filters tests, non-wins, and already-sent dates.
-            $this->notifier->rollLanded($shop, $settings, $roll);
-        }
+        $roll = $this->releaseIfReady($shop, $settings, $roll);
 
-        return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $roll), repeat: ! $roll->wasRecentlyCreated);
+        return $this->present($shop, $settings, $roll, repeat: ! $roll->wasRecentlyCreated);
+    }
+
+    /**
+     * Keep the base prize. Issues the code when this roll was waiting on a choice.
+     *
+     * @return array<string, mixed>
+     */
+    public function take(Shop $shop, RollInput $input): array
+    {
+        return $this->resolveDecision($shop, $input, risk: false);
+    }
+
+    /**
+     * Risk the base prize on a fair coin. A miss clears the win.
+     *
+     * @return array<string, mixed>
+     */
+    public function bet(Shop $shop, RollInput $input): array
+    {
+        return $this->resolveDecision($shop, $input, risk: true);
     }
 
     private function allocateAndRecord(
@@ -135,8 +154,13 @@ class RollService
         $budgetRemaining = null;
         $allocation = null;
 
+        $isPos = $input->channel === Roll::CHANNEL_POS;
+        [$minPick, $maxPick] = $locked->pickRange();
+        $displayed = null;
+
         if ($isTest) {
             $won = $locked->preview_outcome === 'win';
+            $displayed = $won ? $input->pickedNumber : self::losingFace($input->pickedNumber, $minPick, $maxPick);
         } else {
             $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate, $input->ip);
             if ($existing) {
@@ -150,23 +174,44 @@ class RollService
                 throw new RollRejected(RollRejected::SOLD_OUT, 'Today\'s prizes have all been won. Try again next promo day.');
             }
 
-            $allocation = $this->allocator->allocate($locked);
-            $won = $allocation->won;
             $budgetRemaining = $stats->budgetRemaining($locked);
+
+            if ($locked->isDoubleGame() && ! $locked->isGuaranteed()) {
+                $displayed = $this->draw->winningNumber($minPick, $maxPick);
+                $won = $input->pickedNumber === $displayed;
+            } else {
+                $allocation = $this->allocator->allocate($locked);
+                $won = $allocation->won;
+                $displayed = $won ? $input->pickedNumber : self::losingFace($input->pickedNumber, $minPick, $maxPick);
+            }
         }
 
         $payout = $won
             ? PayoutCalculator::calculate(
                 $priced->eligibleSubtotal,
                 (int) $locked->max_payout,
-                $locked->max_payout_percent !== null ? (int) $locked->max_payout_percent : null,
+                $locked->activePayoutPercent(),
                 $budgetRemaining,
             )
             : 0;
         $won = $won && $payout > 0;
 
-        $isPos = $input->channel === Roll::CHANNEL_POS;
-        [$minPick, $maxPick] = $locked->pickRange();
+        $decision = null;
+        $decisionExpires = null;
+        if ($won && $locked->isDoubleGame()) {
+            $higher = PayoutCalculator::calculate(
+                $priced->eligibleSubtotal,
+                (int) $locked->max_payout,
+                $locked->doublePayoutPercent(),
+                $budgetRemaining,
+            );
+            if ($isPos || $higher <= $payout) {
+                $decision = Roll::DECISION_TAKEN;
+            } else {
+                $decision = Roll::DECISION_PENDING;
+                $decisionExpires = now()->addMinutes(self::DECISION_MINUTES);
+            }
+        }
 
         $roll = Roll::create([
             'shop_id' => $shop->id,
@@ -184,15 +229,151 @@ class RollService
             'eligible_subtotal' => $priced->eligibleSubtotal,
             'eligible_product_ids' => $priced->eligibleProductIds,
             'picked_number' => $input->pickedNumber,
-            'displayed_number' => $won ? $input->pickedNumber : self::losingFace($input->pickedNumber, $minPick, $maxPick),
+            'displayed_number' => $displayed ?? ($won ? $input->pickedNumber : self::losingFace($input->pickedNumber, $minPick, $maxPick)),
             'won' => $won,
             'payout' => $payout,
+            'decision' => $decision,
+            'decision_expires_at' => $decisionExpires,
             // POS wins are applied directly to the till invoice, so no Shopify code is ever created.
-            'code_status' => $won && ! $isPos ? Roll::CODE_PENDING : Roll::CODE_NONE,
+            // A pending double-or-nothing choice waits until they take it or the window expires.
+            'code_status' => $won && ! $isPos && $decision !== Roll::DECISION_PENDING ? Roll::CODE_PENDING : Roll::CODE_NONE,
             'is_test' => $isTest,
         ]);
 
         return $roll;
+    }
+
+    /**
+     * Issue a code once the prize is final. An expired choice keeps the base prize.
+     * A fresh pending choice is left alone. Merchant mail waits until the prize is final.
+     */
+    private function releaseIfReady(Shop $shop, ShopSettings $settings, Roll $roll): Roll
+    {
+        if ($roll->decision === Roll::DECISION_PENDING
+            && $roll->decision_expires_at !== null
+            && $roll->decision_expires_at->isPast()) {
+            return $this->finish($shop, $settings, $roll, risk: false);
+        }
+
+        if ($roll->decision === Roll::DECISION_PENDING) {
+            return $roll;
+        }
+
+        $ready = $this->ensureCode($shop, $settings, $roll);
+        if ($roll->wasRecentlyCreated) {
+            $this->notifier->rollLanded($shop, $settings, $ready);
+        }
+
+        return $ready;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveDecision(Shop $shop, RollInput $input, bool $risk): array
+    {
+        $settings = $shop->settingsOrCreate();
+        $roll = $this->findOwnedRoll($shop, $settings, $input);
+        if (! $roll) {
+            throw new RollRejected(RollRejected::CLOSED, 'There is no prize waiting for you.');
+        }
+
+        if ($roll->decision !== Roll::DECISION_PENDING) {
+            return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $roll), repeat: true);
+        }
+
+        $roll = $this->finish($shop, $settings, $roll, $risk);
+
+        return $this->present($shop, $settings, $roll, repeat: false);
+    }
+
+    private function finish(Shop $shop, ShopSettings $settings, Roll $roll, bool $risk): Roll
+    {
+        $notify = false;
+
+        $roll = DB::transaction(function () use ($shop, $settings, $roll, $risk, &$notify) {
+            /** @var Roll $locked */
+            $locked = Roll::whereKey($roll->id)->lockForUpdate()->firstOrFail();
+            if ($locked->decision !== Roll::DECISION_PENDING) {
+                return $locked;
+            }
+
+            $expired = $locked->decision_expires_at !== null && $locked->decision_expires_at->isPast();
+            if (! $risk || $expired) {
+                $locked->forceFill(['decision' => Roll::DECISION_TAKEN])->save();
+                $notify = true;
+
+                return $locked;
+            }
+
+            $higher = $this->higherPrize($settings, $locked);
+            if ($higher <= (int) $locked->payout) {
+                throw new RollRejected(RollRejected::SOLD_OUT, 'That higher prize is no longer available. Take the one you have.');
+            }
+
+            if ($this->draw->doubles()) {
+                $locked->forceFill([
+                    'decision' => Roll::DECISION_DOUBLED,
+                    'payout' => $higher,
+                    'code_status' => $locked->channel === Roll::CHANNEL_POS ? Roll::CODE_NONE : Roll::CODE_PENDING,
+                ])->save();
+            } else {
+                $locked->forceFill([
+                    'decision' => Roll::DECISION_BUSTED,
+                    'won' => false,
+                    'payout' => 0,
+                    'code_status' => Roll::CODE_NONE,
+                ])->save();
+            }
+            $notify = true;
+
+            return $locked;
+        });
+
+        if ($roll->won && $roll->decision !== Roll::DECISION_PENDING) {
+            $roll = $this->ensureCode($shop, $settings, $roll);
+        }
+        if ($notify) {
+            $this->notifier->rollLanded($shop, $settings, $roll);
+        }
+
+        return $roll;
+    }
+
+    private function higherPrize(ShopSettings $settings, Roll $roll): int
+    {
+        $room = null;
+        if ($settings->daily_budget) {
+            $date = $roll->promo_date?->toDateString() ?? (string) $roll->promo_date;
+            $remaining = DayStats::for($roll->shop_id, $date)->budgetRemaining($settings);
+            $room = (int) $roll->payout + (int) $remaining;
+        }
+
+        return PayoutCalculator::calculate(
+            (int) $roll->eligible_subtotal,
+            (int) $settings->max_payout,
+            $settings->doublePayoutPercent(),
+            $room,
+        );
+    }
+
+    private function findOwnedRoll(Shop $shop, ShopSettings $settings, RollInput $input): ?Roll
+    {
+        if (PreviewLinks::isValid($settings, $input->previewToken)) {
+            return Roll::where('shop_id', $shop->id)
+                ->where('is_test', true)
+                ->latest('id')
+                ->first();
+        }
+
+        $window = new PromoWindow($settings, $shop->timezone);
+        $emailHash = $input->email !== null && $input->email !== '' ? IdentityHasher::hashEmail($input->email) : null;
+        $phoneHash = $input->phone !== null && $input->phone !== '' ? IdentityHasher::hashPhone($input->phone) : null;
+        $customerHash = $input->shopifyCustomerId !== null && $input->shopifyCustomerId !== ''
+            ? IdentityHasher::hashShopifyCustomerId($input->shopifyCustomerId)
+            : null;
+
+        return $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $window->promoDate(), $input->ip);
     }
 
     private function ensureCode(Shop $shop, ShopSettings $settings, Roll $roll): Roll
@@ -216,8 +397,11 @@ class RollService
     private function present(Shop $shop, ShopSettings $settings, Roll $roll, bool $repeat): array
     {
         $isPos = $roll->channel === Roll::CHANNEL_POS;
-        $codeReady = ! $roll->won || $roll->code_status === Roll::CODE_CREATED || $isPos;
+        $pending = $roll->decision === Roll::DECISION_PENDING;
+        $codeReady = ! $pending && (! $roll->won || $roll->code_status === Roll::CODE_CREATED || $isPos);
         $symbol = Money::symbolFor($shop->currency);
+        $doublePayout = $pending ? $this->higherPrize($settings, $roll) : null;
+        $offerDouble = $pending && $doublePayout !== null && $doublePayout > (int) $roll->payout;
 
         // What the customer would have won if this roll had gone the other way,
         // so the widget can tease them to come back. Based on their actual cart
@@ -227,7 +411,7 @@ class RollService
             $potentialPayout = PayoutCalculator::calculate(
                 (int) $roll->eligible_subtotal,
                 (int) $settings->max_payout,
-                $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
+                $settings->activePayoutPercent(),
             );
         }
 
@@ -246,9 +430,17 @@ class RollService
             'code' => $roll->won && $codeReady && ! $isPos ? $roll->discount_code : null,
             'code_ready' => $codeReady,
             'ends_at' => ! $isPos ? $roll->discount_ends_at?->toIso8601String() : null,
-            'message' => $codeReady
-                ? WidgetCopy::resultMessage($shop, $settings, $roll)
-                : 'You won! We could not create your code just now. Roll again in a moment to collect it.',
+            'message' => match (true) {
+                $pending => WidgetCopy::offerMessage($shop, $settings, $roll, (int) $doublePayout, $offerDouble),
+                $codeReady => WidgetCopy::resultMessage($shop, $settings, $roll),
+                default => 'You won! We could not create your code just now. Roll again in a moment to collect it.',
+            },
+            'decision' => $roll->decision,
+            'offer_double' => $offerDouble,
+            'base_percent' => (int) ($settings->base_percent ?: 5),
+            'double_percent' => (int) ($settings->double_percent ?: 10),
+            'double_payout' => $doublePayout,
+            'double_payout_formatted' => $doublePayout !== null ? Money::format($doublePayout, $symbol) : null,
             'roll_id' => $roll->id,
             'channel' => $roll->channel,
         ];

@@ -30,7 +30,9 @@ class DiscountCodeService
             $roll->payout,
             $settings->max_payout,
             (int) $roll->eligible_subtotal,
-            $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
+            $settings->isDoubleGame()
+                ? $settings->doublePayoutPercent()
+                : ($settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null),
             ['shop' => $shop->domain, 'roll_id' => $roll->id],
         );
 

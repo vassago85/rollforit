@@ -39,6 +39,8 @@ Route::middleware('shopify.session')->prefix('admin')->name('api.admin.')->group
 Route::prefix('proxy')->name('proxy.')->group(function () {
     Route::get('status', [ProxyController::class, 'status'])->middleware('shopify.proxy')->name('status');
     Route::post('roll', [ProxyController::class, 'roll'])->middleware('shopify.proxy:once')->name('roll');
+    Route::post('take', [ProxyController::class, 'take'])->middleware('shopify.proxy:once')->name('take');
+    Route::post('bet', [ProxyController::class, 'bet'])->middleware('shopify.proxy:once')->name('bet');
     Route::post('email/send-code', [ProxyController::class, 'sendVerifyCode'])->middleware('shopify.proxy:once')->name('email.send');
     Route::post('email/verify-code', [ProxyController::class, 'verifyCode'])->middleware('shopify.proxy:once')->name('email.verify');
 });

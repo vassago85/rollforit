@@ -143,11 +143,17 @@ class AdvertCopyService
         $guaranteed = $settings->isGuaranteed();
         $maxPayout = $settings->max_payout ? Money::format($settings->max_payout, $symbol) : '';
         $percent = $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null;
-        $prize = $maxPayout === ''
-            ? ''
-            : ($percent
-                ? sprintf('up to %d%% of your cart (max %s)', $percent, $maxPayout)
-                : 'up to '.$maxPayout);
+        if ($settings->isDoubleGame()) {
+            $prize = $maxPayout === ''
+                ? ''
+                : sprintf('%d%% of your cart, or risk it for %d%% (max %s)', $settings->activePayoutPercent(), $settings->doublePayoutPercent(), $maxPayout);
+        } else {
+            $prize = $maxPayout === ''
+                ? ''
+                : ($percent
+                    ? sprintf('up to %d%% of your cart (max %s)', $percent, $maxPayout)
+                    : 'up to '.$maxPayout);
+        }
 
         return [
             'day' => $settings->isDatesSchedule() ? $dateJoined : TermsService::joinList($days),
@@ -164,10 +170,12 @@ class AdvertCopyService
             'odds_clause' => $guaranteed ? "One in every {$n} rolls wins" : "Each roll has a 1 in {$n} chance to win",
             'odds_short' => $guaranteed ? "1 in {$n} rolls wins." : "Each roll has a 1 in {$n} chance to win.",
             // Dice-aware phrasing so switching to two dice rewrites every advert on its own.
-            'dice_phrase' => $diceCount === 2 ? 'the dice' : 'the die',
-            'pick_phrase' => $diceCount === 2
-                ? "a sum from {$pickMin} to {$pickMax}"
-                : "a number from {$pickMin} to {$pickMax}",
+            'dice_phrase' => $settings->isDoubleGame() ? 'a card' : ($diceCount === 2 ? 'the dice' : 'the die'),
+            'pick_phrase' => $settings->isDoubleGame()
+                ? "1 of {$n}"
+                : ($diceCount === 2
+                    ? "a sum from {$pickMin} to {$pickMax}"
+                    : "a number from {$pickMin} to {$pickMax}"),
         ];
     }
 

@@ -52,7 +52,8 @@ class PosController extends Controller
             'max_payout' => (int) $settings->max_payout,
             'max_payout_formatted' => Money::format($settings->max_payout, $symbol),
             'odds' => WidgetCopy::oddsStatement($settings),
-            'disclaimer' => WidgetCopy::pickDisclaimer(),
+            'disclaimer' => WidgetCopy::pickDisclaimer($settings),
+            'game' => $settings->game ?: \App\Models\ShopSettings::GAME_DICE,
             'headline' => $settings->headline ?: WidgetCopy::DEFAULT_HEADLINE,
             'next_roll' => $next ? [
                 'starts_at' => $next->toIso8601String(),
@@ -73,7 +74,7 @@ class PosController extends Controller
         $data = $request->validate([
             'email' => ['nullable', 'required_without:phone', 'email:rfc', 'max:254'],
             'phone' => ['nullable', 'required_without:email', 'string', 'max:30'],
-            'picked_number' => ['required', 'integer', 'between:1,10'],
+            'picked_number' => ['required', 'integer', 'between:1,1000'],
             // POS tills send a single cents amount — product-level eligibility is enforced
             // in-store by the operator at the till, not by this app.
             'subtotal_cents' => ['required', 'integer', 'min:0'],

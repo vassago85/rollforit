@@ -22,6 +22,10 @@ class ShopSettings extends Model
 
     public const SCHEDULE_DATES = 'dates';
 
+    public const GAME_DICE = 'dice';
+
+    public const GAME_DOUBLE = 'double';
+
     protected $table = 'shop_settings';
 
     protected $guarded = ['id', 'shop_id'];
@@ -34,12 +38,41 @@ class ShopSettings extends Model
         'odds_mode' => self::MODE_GUARANTEED,
         'odds_n' => 10,
         'dice_count' => 1,
+        'game' => self::GAME_DICE,
+        'base_percent' => 5,
+        'double_percent' => 10,
         'terms_mode' => self::TERMS_GENERATED,
     ];
 
     public function pickRange(): array
     {
+        if ($this->isDoubleGame()) {
+            return [1, max(2, (int) $this->odds_n)];
+        }
+
         return (int) $this->dice_count === 2 ? [2, 12] : [1, 10];
+    }
+
+    public function isDoubleGame(): bool
+    {
+        return $this->game === self::GAME_DOUBLE;
+    }
+
+    /**
+     * Percent used for a normal win. Null means the dice game has no percent cap.
+     */
+    public function activePayoutPercent(): ?int
+    {
+        if ($this->isDoubleGame()) {
+            return max(1, (int) ($this->base_percent ?: 5));
+        }
+
+        return $this->max_payout_percent !== null ? (int) $this->max_payout_percent : null;
+    }
+
+    public function doublePayoutPercent(): int
+    {
+        return max(1, (int) ($this->double_percent ?: 10));
     }
 
     protected function casts(): array
@@ -48,6 +81,8 @@ class ShopSettings extends Model
             'enabled' => 'boolean',
             'odds_n' => 'integer',
             'dice_count' => 'integer',
+            'base_percent' => 'integer',
+            'double_percent' => 'integer',
             'promo_days' => 'array',
             'promo_dates' => 'array',
             'min_order' => 'integer',

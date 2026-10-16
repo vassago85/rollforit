@@ -96,7 +96,7 @@ class ProxyController extends Controller
         // Accept the widest range here; RollService re-validates against the shop's dice_count.
         $data = $request->validate([
             'email' => ['nullable', 'email:rfc', 'max:254'],
-            'picked_number' => ['required', 'integer', 'between:1,12'],
+            'picked_number' => ['required', 'integer', 'between:1,1000'],
             'lines' => ['required', 'array', 'min:1', 'max:'.config('shopify.roll.max_cart_lines')],
             'lines.*.variant_id' => ['required'],
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:'.config('shopify.roll.max_line_quantity')],
@@ -149,6 +149,65 @@ class ProxyController extends Controller
             ], 500);
         } catch (ShopifyApiException $e) {
             Log::error('Roll failed on Shopify API', ['shop' => $shop->domain, 'error' => $e->getMessage()]);
+
+            return $this->noStore(['error' => 'unavailable', 'message' => 'Something went wrong. Please try again.'], 503);
+        }
+
+        return $this->noStore($result);
+    }
+
+    public function take(Request $request, RollService $rolls, EmailVerification $verification): JsonResponse
+    {
+        return $this->decide($request, $rolls, $verification, risk: false);
+    }
+
+    public function bet(Request $request, RollService $rolls, EmailVerification $verification): JsonResponse
+    {
+        return $this->decide($request, $rolls, $verification, risk: true);
+    }
+
+    private function decide(Request $request, RollService $rolls, EmailVerification $verification, bool $risk): JsonResponse
+    {
+        $data = $request->validate([
+            'email' => ['nullable', 'email:rfc', 'max:254'],
+            'preview' => ['nullable', 'string', 'max:100'],
+            'card' => ['nullable', 'integer', 'in:1,2'],
+        ]);
+
+        $shop = $this->shop($request);
+        $customerId = $request->attributes->get('logged_in_customer_id');
+        $settings = $shop->settingsOrCreate();
+        $window = new PromoWindow($settings, $shop->timezone);
+        $isTest = PreviewLinks::isValid($settings, $data['preview'] ?? null);
+
+        if (! $customerId && ! $isTest) {
+            if (empty($data['email'])) {
+                return $this->noStore(['error' => 'email_required', 'message' => 'Enter your email to roll.'], 422);
+            }
+            if (! $verification->isVerified($shop, $data['email'], $window->promoDate())) {
+                return $this->noStore(['error' => 'email_not_verified', 'message' => 'Please confirm your email before rolling.'], 403);
+            }
+        }
+
+        try {
+            $input = new RollInput(
+                email: $data['email'] ?? null,
+                pickedNumber: 1,
+                lines: [],
+                ip: $request->attributes->get('customer_ip'),
+                shopifyCustomerId: $customerId,
+                previewToken: $data['preview'] ?? null,
+            );
+            $result = $risk ? $rolls->bet($shop, $input) : $rolls->take($shop, $input);
+        } catch (RollRejected $e) {
+            return $this->noStore(['error' => $e->reason, 'message' => $e->getMessage()], $e->status);
+        } catch (PayoutGuardViolation) {
+            return $this->noStore([
+                'error' => 'prize_unavailable',
+                'message' => 'Sorry, we could not issue your prize. Please contact the store.',
+            ], 500);
+        } catch (ShopifyApiException $e) {
+            Log::error('Roll decision failed on Shopify API', ['shop' => $shop->domain, 'error' => $e->getMessage()]);
 
             return $this->noStore(['error' => 'unavailable', 'message' => 'Something went wrong. Please try again.'], 503);
         }

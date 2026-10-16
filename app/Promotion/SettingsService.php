@@ -20,6 +20,7 @@ class SettingsService
     private const TERMS_FIELDS = [
         'schedule_mode', 'promo_days', 'promo_dates', 'start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent',
         'daily_budget', 'max_winners_per_day', 'excluded_collections', 'odds_mode', 'odds_n', 'dice_count',
+        'game', 'base_percent', 'double_percent',
         'promoter_name', 'promoter_registration_number', 'promoter_address', 'promoter_email', 'promoter_phone',
     ];
 
@@ -38,6 +39,9 @@ class SettingsService
             'odds_mode' => ['required', 'in:'.ShopSettings::MODE_GUARANTEED.','.ShopSettings::MODE_CHANCE],
             'odds_n' => ['required', 'integer', 'min:2', 'max:1000'],
             'dice_count' => ['sometimes', 'integer', 'in:1,2'],
+            'game' => ['sometimes', 'in:'.ShopSettings::GAME_DICE.','.ShopSettings::GAME_DOUBLE],
+            'base_percent' => ['sometimes', 'nullable', 'integer', 'between:1,99'],
+            'double_percent' => ['sometimes', 'nullable', 'integer', 'between:2,100'],
             // Weekly: tick days of the week. Dates: list specific calendar dates (campaign mode).
             // Both arrays are always "present" so the UI can send empty arrays when the mode
             // doesn't need them; the mode gates whether an empty array is a blocker (see model).
@@ -88,6 +92,7 @@ class SettingsService
             'max_payout.required' => 'Set a maximum payout.',
             'max_payout.not_regex' => 'The maximum payout must be greater than 0.',
             'max_payout_percent.between' => 'The payout percentage cap must be between 1 and 100.',
+            'double_percent' => 'The risk prize must be higher than the prize they can keep.',
             'min_order.not_regex' => 'The minimum order must be greater than 0.',
             '*.regex' => 'Enter an amount like 500 or 499.99.',
         ];
@@ -105,6 +110,17 @@ class SettingsService
 
         if (! empty($data['start_time']) && ! empty($data['end_time']) && $data['end_time'] <= $data['start_time']) {
             throw ValidationException::withMessages(['end_time' => 'The end time must be after the start time.']);
+        }
+
+        $game = $data['game'] ?? $settings->game ?? ShopSettings::GAME_DICE;
+        if ($game === ShopSettings::GAME_DOUBLE) {
+            $base = (int) ($data['base_percent'] ?? $settings->base_percent ?? 5);
+            $double = (int) ($data['double_percent'] ?? $settings->double_percent ?? 10);
+            if ($double <= $base) {
+                throw ValidationException::withMessages([
+                    'double_percent' => 'The risk prize must be higher than the prize they can keep.',
+                ]);
+            }
         }
 
         foreach (self::MONEY_FIELDS as $field) {
@@ -156,6 +172,9 @@ class SettingsService
                 'odds_mode' => $settings->odds_mode,
                 'odds_n' => (int) $settings->odds_n,
                 'dice_count' => (int) $settings->dice_count,
+                'game' => $settings->game ?: ShopSettings::GAME_DICE,
+                'base_percent' => (int) ($settings->base_percent ?: 5),
+                'double_percent' => (int) ($settings->double_percent ?: 10),
                 'schedule_mode' => $settings->schedule_mode ?: ShopSettings::SCHEDULE_WEEKLY,
                 'promo_days' => array_map('intval', $settings->promo_days ?? []),
                 'promo_dates' => array_values(array_map('strval', $settings->promo_dates ?? [])),

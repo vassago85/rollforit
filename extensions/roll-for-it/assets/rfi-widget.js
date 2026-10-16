@@ -695,14 +695,18 @@
         ? this.status.pick_range
         : { min: 1, max: 10 };
       const count = range.max - range.min + 1;
-      const grid = this.status.dice_count === 2 ? ' rfi-grid--wide' : '';
+      const cards = this.status.game === 'double' && count <= 12;
+      const grid = cards ? ' rfi-grid--cards' : (this.status.dice_count === 2 ? ' rfi-grid--wide' : '');
       const nums = Array.from({ length: count }, (_, i) => i + range.min)
         .map((n) => '<button type="button" class="rfi-num" data-n="' + n + '" aria-pressed="' + (this.picked === n) + '">' + n + '</button>').join('');
-      this.body.innerHTML = '<p class="rfi-label">Pick your number</p><div class="rfi-grid' + grid + '" role="group" aria-label="Pick a number from ' + range.min + ' to ' + range.max + '">' + nums + '</div>'
+      const playLabel = this.status.game === 'double'
+        ? 'Play'
+        : ('Roll ' + (this.status.dice_count === 2 ? 'the dice' : 'the die'));
+      this.body.innerHTML = '<p class="rfi-label">' + (this.status.game === 'double' ? 'Pick one' : 'Pick your number') + '</p><div class="rfi-grid' + grid + '" role="group" aria-label="Pick from ' + range.min + ' to ' + range.max + '">' + nums + '</div>'
         + '<p class="rfi-note">' + esc(this.status.disclaimer) + '</p>'
         + '<p class="rfi-min" hidden></p>'
         + (error ? '<p class="rfi-error" role="alert">' + esc(error) + '</p>' : '')
-        + '<button type="button" class="rfi-roll" disabled>Roll ' + (this.status.dice_count === 2 ? 'the dice' : 'the die') + '</button>';
+        + '<button type="button" class="rfi-roll" disabled>' + playLabel + '</button>';
       this.body.querySelector('.rfi-grid').addEventListener('click', (e) => {
         const b = e.target.closest('.rfi-num');
         if (!b) return;
@@ -760,12 +764,18 @@
       this.busy = true;
       const anim = this.status.animation;
       const sound = makeSound(anim.sound);
-      this.body.innerHTML = '<div class="rfi-stage" aria-hidden="true"></div><p class="rfi-msg">Rolling…</p>';
+      const cards = this.status.game === 'double';
+      this.body.innerHTML = '<div class="rfi-stage" aria-hidden="true"></div><p class="rfi-msg">' + (cards ? 'Revealing…' : 'Rolling…') + '</p>';
       const stage = this.body.querySelector('.rfi-stage');
-      const die = await this.makeDie(stage);
+      let die = null;
+      if (cards) {
+        stage.innerHTML = '<div class="rfi-card rfi-card--flip">' + esc(String(this.picked)) + '</div>';
+      } else {
+        die = await this.makeDie(stage);
+        die.start();
+        sound.rattle();
+      }
       const started = performance.now();
-      die.start();
-      sound.rattle();
 
       let result = null;
       let error = null;
@@ -804,7 +814,7 @@
 
       if (error) {
         sound.stop();
-        die.dispose && die.dispose();
+        die && die.dispose && die.dispose();
         this.busy = false;
         this.renderForm(error);
         this.refreshCart();
@@ -812,8 +822,9 @@
       }
 
       const settleAt = started + Math.max(800, anim.duration_ms - 500);
-      if (!result.repeat) await sleep(Math.max(0, settleAt - performance.now()));
-      await die.settle(result.displayed_number);
+      if (!cards && !result.repeat) await sleep(Math.max(0, settleAt - performance.now()));
+      if (cards) await sleep(result.repeat ? 0 : 500);
+      else await die.settle(result.displayed_number);
       sound.stop();
       this.busy = false;
       if (!result.test) LOCAL.setItem(RESULT_KEY, JSON.stringify({ at: Date.now(), promo_date: this.status.promo_date, result }));
@@ -821,12 +832,20 @@
     }
 
     async showResult(result, fresh, die, sound) {
+      if (result && result.decision === 'pending') {
+        this.renderOffer(result, fresh, sound);
+        return;
+      }
       const anim = this.status.animation;
       if (!die) {
         this.body.innerHTML = '<div class="rfi-stage" aria-hidden="true"></div>';
         const stage = this.body.querySelector('.rfi-stage');
-        const renderer = this.status.dice_count === 2 ? cssTwoDice(stage, anim) : cssDie(stage, anim);
-        renderer.show(result.displayed_number);
+        if (this.status.game === 'double') {
+          stage.innerHTML = '<div class="rfi-card">' + esc(String(result.displayed_number)) + '</div>';
+        } else {
+          const renderer = this.status.dice_count === 2 ? cssTwoDice(stage, anim) : cssDie(stage, anim);
+          renderer.show(result.displayed_number);
+        }
       }
       const stageHtml = this.body.querySelector('.rfi-stage');
       this.body.innerHTML = '';
@@ -901,6 +920,103 @@
         title.appendChild(document.createTextNode(' '));
         title.appendChild(span);
       }
+    }
+
+    renderOffer(result, fresh, sound) {
+      this.lastOffer = result;
+      if (fresh && sound) sound.win();
+      const anim = this.status.animation;
+      if (fresh && anim && anim.celebration) confetti([anim.accent_color, anim.die_color, '#ffffff', '#22c55e']);
+      const base = result.base_percent || this.status.base_percent;
+      const higher = result.double_percent || this.status.double_percent;
+      this.body.innerHTML = '<p class="rfi-msg rfi-msg--win">' + esc(result.message) + '</p>'
+        + '<div class="rfi-offer">'
+        + '<button type="button" class="rfi-roll" data-decide="take">Take ' + esc(String(base)) + '% (' + esc(result.payout_formatted) + ')</button>'
+        + (result.offer_double
+          ? '<button type="button" class="rfi-risk" data-decide="bet">Risk it for ' + esc(String(higher)) + '% (' + esc(result.double_payout_formatted) + ')</button>'
+          : '')
+        + '</div>'
+        + '<p class="rfi-note">A blank on the second pick pays nothing. If you leave this, you keep the first prize.</p>';
+      this.live.textContent = result.message;
+      this.body.querySelector('[data-decide="take"]').addEventListener('click', () => this.decide('take'));
+      const risk = this.body.querySelector('[data-decide="bet"]');
+      if (risk) risk.addEventListener('click', () => this.renderRisk(result));
+    }
+
+    renderRisk(result) {
+      this.body.innerHTML = '<p class="rfi-label">Pick a card. One pays ' + esc(String(result.double_percent)) + '%. The other pays nothing.</p>'
+        + '<div class="rfi-grid rfi-grid--cards" role="group" aria-label="Pick one of two cards">'
+        + '<button type="button" class="rfi-num" data-card="1">?</button>'
+        + '<button type="button" class="rfi-num" data-card="2">?</button>'
+        + '</div>'
+        + '<p class="rfi-note">A blank cancels the ' + esc(String(result.base_percent)) + '% you already won.</p>';
+      this.body.querySelector('.rfi-grid').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-card]');
+        if (!b || this.busy) return;
+        this.decide('bet');
+      });
+    }
+
+    async decide(path) {
+      if (this.busy) return;
+      const offer = this.lastOffer;
+      if (offer && offer.simulated) {
+        const next = Object.assign({}, offer);
+        if (path === 'take') {
+          next.decision = 'taken';
+          next.code = next.code || ('SIM-' + Math.random().toString(36).slice(2, 8).toUpperCase());
+          next.code_ready = true;
+          next.won = true;
+          next.message = 'You kept ' + next.payout_formatted + '.';
+        } else if (Math.random() < 0.5) {
+          next.decision = 'doubled';
+          next.won = true;
+          next.payout = next.double_payout;
+          next.payout_formatted = next.double_payout_formatted;
+          next.code = next.code || ('SIM-' + Math.random().toString(36).slice(2, 8).toUpperCase());
+          next.code_ready = true;
+          next.message = 'You won ' + next.payout_formatted + '.';
+        } else {
+          next.decision = 'busted';
+          next.won = false;
+          next.payout = 0;
+          next.code = null;
+          next.code_ready = true;
+          next.message = 'Blank card. The first prize is gone.';
+        }
+        this.showResult(next, true, null, makeSound(this.status.animation && this.status.animation.sound));
+        return;
+      }
+      this.busy = true;
+      let result = null;
+      let error = null;
+      try {
+        const res = await fetch(this.cfg.proxy + '/' + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            email: this.verifiedEmail || null,
+            preview: preview() || null,
+          }),
+        });
+        const data = await json(res);
+        if (res.ok) result = data;
+        else error = (data && data.message) || 'Something went wrong. Please try again.';
+      } catch (e) {
+        error = 'We could not reach the store. Please try again.';
+      }
+      this.busy = false;
+      if (error) {
+        this.renderOffer(this.lastOffer || { message: error, offer_double: false, payout_formatted: '', base_percent: '' }, false, null);
+        const alert = document.createElement('p');
+        alert.className = 'rfi-error';
+        alert.setAttribute('role', 'alert');
+        alert.textContent = error;
+        this.body.appendChild(alert);
+        return;
+      }
+      if (!result.test) LOCAL.setItem(RESULT_KEY, JSON.stringify({ at: Date.now(), promo_date: this.status.promo_date, result }));
+      this.showResult(result, true, null, makeSound(this.status.animation && this.status.animation.sound));
     }
 
     appendShareButton(result) {

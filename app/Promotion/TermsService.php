@@ -92,6 +92,11 @@ class TermsService
             'diceCount' => $diceCount,
             'dicePhrase' => $dicePhrase,
             'pickPhrase' => $pickPhrase,
+            'isDouble' => $settings->isDoubleGame(),
+            'basePercent' => $settings->activePayoutPercent(),
+            'doublePercent' => $settings->doublePayoutPercent(),
+            'oddsN' => (int) $settings->odds_n,
+            'guaranteed' => $settings->isGuaranteed(),
             'excludedTitles' => array_values(array_filter(array_map(
                 fn ($c) => is_array($c) ? ($c['title'] ?? null) : null,
                 $settings->excluded_collections ?? [],

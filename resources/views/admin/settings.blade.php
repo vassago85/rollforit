@@ -66,7 +66,7 @@
                 <s-number-field id="max_payout" data-field="max_payout" label="Maximum payout" prefix="R" min="0.01" step="0.01" required details="The most a single win can take off."></s-number-field>
             </s-stack>
             <s-stack direction="inline" gap="base">
-                <s-number-field id="max_payout_percent" data-field="max_payout_percent" label="Max payout % of basket (optional)" suffix="%" min="1" max="100" step="1" details="Prevents 100%-off wins on small carts. Leave blank to only limit by the amount above. The smaller of the two caps always wins."></s-number-field>
+                <s-number-field id="max_payout_percent" data-field="max_payout_percent" label="Max payout % of basket (optional)" suffix="%" min="1" max="100" step="1" details="Dice only. Prevents 100%-off wins on small carts. Leave blank to only limit by the amount above. The smaller of the two caps always wins."></s-number-field>
                 <s-number-field id="daily_budget" data-field="daily_budget" label="Daily prize budget (optional)" prefix="R" min="0.01" step="0.01" details="Closes the promotion for the day once prizes reach this total."></s-number-field>
                 <s-number-field id="max_winners_per_day" data-field="max_winners_per_day" label="Max winners per day (optional)" min="1" step="1"></s-number-field>
             </s-stack>
@@ -88,10 +88,18 @@
                     <s-option value="chance">Random: every roll has a 1 in N chance</s-option>
                 </s-select>
                 <s-number-field id="odds_n" data-field="odds_n" label="N" min="2" max="1000" step="1"></s-number-field>
+                <s-select id="game" label="Game" details="Double or nothing: they pick 1 of N for the base percent, then may risk it for the higher percent.">
+                    <s-option value="dice">Dice</s-option>
+                    <s-option value="double">Double or nothing</s-option>
+                </s-select>
                 <s-select id="dice_count" data-field="dice_count" label="Dice" details="Switching Dice snaps N to its natural pairing (10 for one die, 11 for two dice).">
                     <s-option value="1">1 die (pick 1–10 · natural odds 1 in 10)</s-option>
                     <s-option value="2">2 dice (pick 2–12 · natural odds 1 in 11)</s-option>
                 </s-select>
+            </s-stack>
+            <s-stack direction="inline" gap="base" id="double-percents" hidden>
+                <s-number-field id="base_percent" data-field="base_percent" label="Prize they can keep" suffix="%" min="1" max="99" step="1" details="Percent of this cart if they take the win."></s-number-field>
+                <s-number-field id="double_percent" data-field="double_percent" label="Prize if they risk it" suffix="%" min="2" max="100" step="1" details="A fair 50/50. A miss cancels the first prize. Same expected cost as keeping the first prize when this is double."></s-number-field>
             </s-stack>
             <s-paragraph id="odds-statement"></s-paragraph>
             <s-stack direction="inline" gap="small-200" id="odds-nudge" hidden>
@@ -206,7 +214,7 @@
 <script>
 (() => {
   const { api, toast, el, esc, copy, centsToMoney, moneyToCents, showErrors } = RFI;
-  const TEXT = ['start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent', 'daily_budget', 'max_winners_per_day', 'odds_n', 'dice_count',
+  const TEXT = ['start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent', 'daily_budget', 'max_winners_per_day', 'odds_n', 'dice_count', 'base_percent', 'double_percent',
     'headline', 'win_message', 'lose_message', 'die_color', 'die_number_color', 'accent_color', 'roll_duration_ms',
     'drawer_selector', 'promoter_name', 'promoter_registration_number', 'promoter_address', 'promoter_email', 'promoter_phone'];
   const BOOLS = ['enabled', 'sound_enabled', 'celebration_enabled', 'show_countdown', 'pos_enabled'];
@@ -224,6 +232,7 @@
     TEXT.forEach((k) => { el(k).value = f[k] === null || f[k] === undefined ? '' : String(f[k]); });
     BOOLS.forEach((k) => { el(k).checked = !!f[k]; });
     el('odds_mode').value = f.odds_mode;
+    el('game').value = f.game || 'dice';
     el('dice_count').value = String(f.dice_count || 1);
     el('schedule_mode').value = f.schedule_mode || 'weekly';
     promoDates = Array.isArray(f.promo_dates) ? [...f.promo_dates] : [];
@@ -293,8 +302,13 @@
     const symbol = state ? state.shop.symbol : 'R';
     const cart = moneyToCents(el('example_cart').value);
     const max = moneyToCents(el('max_payout').value);
-    const pct = parseInt(el('max_payout_percent').value, 10);
+    const doubleGame = el('game').value === 'double';
+    const pct = doubleGame ? parseInt(el('base_percent').value, 10) : parseInt(el('max_payout_percent').value, 10);
     const n = parseInt(el('odds_n').value, 10);
+    el('dice_count').hidden = doubleGame;
+    el('max_payout_percent').hidden = doubleGame;
+    const percents = el('double-percents');
+    if (percents) percents.hidden = !doubleGame;
 
     if (cart && max) {
       const percentCap = pct > 0 ? Math.floor(cart * pct / 100) : Infinity;
@@ -317,7 +331,7 @@
         + (guaranteed ? ' Rolls are dealt in blocks of ' + n + ' with exactly one winner per block; blocks carry over between days.' : '')
       : '';
     // Standalone nudge with a one-click "Use natural odds" button.
-    const offNatural = n && n !== natural;
+    const offNatural = !doubleGame && n && n !== natural;
     el('odds-nudge').hidden = !offNatural;
     if (offNatural) {
       el('odds-nudge-text').textContent = 'Natural odds for ' + (dice === 2 ? '2 dice' : '1 die') + ' is 1 in ' + natural + '.';
@@ -329,6 +343,7 @@
     TEXT.forEach((k) => { const v = el(k).value; body[k] = v === '' ? null : v; });
     BOOLS.forEach((k) => { body[k] = !!el(k).checked; });
     body.odds_mode = el('odds_mode').value;
+    body.game = el('game').value || 'dice';
     body.schedule_mode = el('schedule_mode').value || 'weekly';
     body.promo_days = (el('promo_days').values || []).map(Number);
     // Server dedupes + sorts, but we strip blanks here so a half-filled row
@@ -427,7 +442,7 @@
   el('save').addEventListener('click', save);
   el('schedule_mode').addEventListener('change', applyScheduleMode);
   el('promo_date_add').addEventListener('click', addPromoDate);
-  ['example_cart', 'max_payout', 'max_payout_percent', 'odds_n', 'odds_mode'].forEach((id) => {
+  ['example_cart', 'max_payout', 'max_payout_percent', 'odds_n', 'odds_mode', 'base_percent', 'double_percent', 'game'].forEach((id) => {
     el(id).addEventListener('input', updateLive);
     el(id).addEventListener('change', updateLive);
   });
@@ -440,6 +455,10 @@
     updateLive();
   }
   el('dice_count').addEventListener('change', snapToNatural);
+  el('game').addEventListener('change', () => {
+    if (el('game').value === 'dice') snapToNatural();
+    else updateLive();
+  });
   const naturalBtn = el('odds-use-natural');
   if (naturalBtn) naturalBtn.addEventListener('click', snapToNatural);
   el('pick-collections').addEventListener('click', async () => {

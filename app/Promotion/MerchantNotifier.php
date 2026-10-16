@@ -36,7 +36,7 @@ final class MerchantNotifier
             return;
         }
 
-        if ($roll->won) {
+        if ($roll->won && $roll->decision !== Roll::DECISION_PENDING) {
             $this->send(fn () => $this->mailer->send(new MerchantRollWon($shop, $settings, $roll)),
                 "roll-won shop={$shop->id} roll={$roll->id}");
         }

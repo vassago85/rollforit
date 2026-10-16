@@ -25,8 +25,17 @@
 <h3>3. How to enter</h3>
 <ul>
     <li>Add products worth at least {{ $minOrder }} to your cart. Gift cards and shipping do not count towards this amount.</li>
-    <li>On the cart page, pick {{ $pickPhrase }} and roll {{ $dicePhrase }}. If you are signed in to the store, we use your account. If you are a guest, you will be asked for an email address.</li>
-    <li>The number you pick is for fun only. It does not affect whether you win.</li>
+    @if($isDouble)
+        <li>On the cart page, pick 1 of {{ $oddsN }}. If you are signed in to the store, we use your account. If you are a guest, you will be asked for an email address.</li>
+        @if($guaranteed)
+            <li>One in every {{ $oddsN }} entries wins. Your pick is the choice a win is shown on. It does not change which entry wins.</li>
+        @else
+            <li>One of the {{ $oddsN }} choices is the winner. You win the first prize only if you pick it.</li>
+        @endif
+    @else
+        <li>On the cart page, pick {{ $pickPhrase }} and roll {{ $dicePhrase }}. If you are signed in to the store, we use your account. If you are a guest, you will be asked for an email address.</li>
+        <li>The number you pick is for fun only. It does not affect whether you win.</li>
+    @endif
     <li>You may roll once per promo day. The limit is enforced per store account, per email address and per phone number. If any of those has already rolled today, the earlier result applies.</li>
     <li>The promoter may limit the number of rolls from one connection to prevent abuse.</li>
 </ul>
@@ -35,18 +44,28 @@
 <ul>
     <li>If you are shopping in store, a staff member may offer you a roll before you pay once your sale reaches {{ $minOrder }}.</li>
     <li>You will be asked for your email address or your cell phone number. We use this only to make sure the same person does not roll twice on the same day (online and in-store entries share the same daily limit).</li>
-    <li>The in-store {{ $diceCount === 2 ? 'dice are' : 'die is' }} run by the promoter's server, exactly like the online version. The result is final the moment the roll is made.</li>
+    @if($isDouble)
+        <li>The in-store game is run by the promoter's server. A win in store is the first prize only. There is no second pick at the till, and the result is final the moment the roll is made.</li>
+    @else
+        <li>The in-store {{ $diceCount === 2 ? 'dice are' : 'die is' }} run by the promoter's server, exactly like the online version. The result is final the moment the roll is made.</li>
+    @endif
     <li>If you win, the discount is applied to the sale on the till right away. There is no code to carry away — the win cannot be used on a future visit, cannot be split across sales and cannot be refunded for cash.</li>
     <li>Prizes won in store still come out of the same daily allocation as online wins.</li>
 </ul>
 
 <h3>4. How winners are chosen</h3>
 <p>{{ $oddsStatement }}</p>
-<p>Every outcome is decided by the promoter's server when you roll. The die animation only shows the result.</p>
+@if($isDouble)
+    <p>Every outcome is decided by the promoter's server when you pick. In the second pick, one of the two cards wins. That pick is an even chance and does not use another entry from the daily allocation block.</p>
+@else
+    <p>Every outcome is decided by the promoter's server when you roll. The die animation only shows the result.</p>
+@endif
 
 <h3>5. The prize</h3>
 <ul>
-    @if($maxPayoutPercent)
+    @if($isDouble)
+        <li>A win is {{ $basePercent }}% of the qualifying items in your cart, capped at {{ $maxPayout }}. Online, you can keep that prize or risk it. The second pick is an even chance: a hit makes the prize {{ $doublePercent }}% of the same cart (still capped at {{ $maxPayout }}), and a miss cancels the prize. If you do not choose within 10 minutes, you keep the first prize. In store, the prize is {{ $basePercent }}% and there is no second pick.</li>
+    @elseif($maxPayoutPercent)
         <li>A win is a discount of up to {{ $maxPayoutPercent }}% of the qualifying items in your cart, capped at {{ $maxPayout }}. The discount is the lesser of these two caps and is never more than the value of the qualifying items when you rolled.</li>
     @else
         <li>A win is a discount of up to {{ $maxPayout }} off your order. The discount equals the value of the qualifying items in your cart when you rolled, up to a maximum of {{ $maxPayout }}.</li>
