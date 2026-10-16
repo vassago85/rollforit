@@ -218,29 +218,80 @@
     };
   }
 
+  /**
+   * Celebratory confetti: two bottom-corner cannons fire first, then a top-center encore
+   * drops a wave of mixed-shape pieces (rectangles, discs, streamers). Honours
+   * prefers-reduced-motion by skipping the whole animation.
+   */
   function confetti(colors) {
     if (reduceMotion) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const canvas = document.createElement('canvas');
     canvas.className = 'rfi-confetti';
-    canvas.width = innerWidth;
-    canvas.height = innerHeight;
+    const sizeCanvas = () => {
+      canvas.width = Math.max(1, innerWidth * dpr);
+      canvas.height = Math.max(1, innerHeight * dpr);
+      canvas.style.width = innerWidth + 'px';
+      canvas.style.height = innerHeight + 'px';
+    };
+    sizeCanvas();
+    const onResize = () => sizeCanvas();
+    window.addEventListener('resize', onResize);
     document.body.appendChild(canvas);
     const g = canvas.getContext('2d');
-    const bits = Array.from({ length: 140 }, () => ({
-      x: innerWidth / 2 + (Math.random() - 0.5) * 200, y: innerHeight / 3,
-      vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 14 - 4,
-      r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.4,
-      c: colors[Math.floor(Math.random() * colors.length)], w: 6 + Math.random() * 6,
-    }));
-    const end = performance.now() + 2800;
+
+    const SHAPES = ['rect', 'circle', 'streamer'];
+    const makePiece = (x, y, vx, vy) => ({
+      x, y, vx, vy,
+      r: Math.random() * Math.PI * 2,
+      vr: (Math.random() - 0.5) * 0.4,
+      shape: SHAPES[Math.floor(Math.random() * SHAPES.length)],
+      c: colors[Math.floor(Math.random() * colors.length)],
+      w: 7 + Math.random() * 8,
+      alpha: 1,
+    });
+    // Cannon from a bottom corner, aimed inward and up.
+    const cannon = (originX, dir, count) => Array.from({ length: count }, () => {
+      const angle = (-Math.PI / 2) + dir * (Math.random() * 0.45 + 0.15);
+      const speed = 14 + Math.random() * 10;
+      return makePiece(originX, innerHeight - 10, Math.cos(angle) * speed, Math.sin(angle) * speed);
+    });
+    // Encore from the top-center, raining down.
+    const encore = (count) => Array.from({ length: count }, () => makePiece(
+      innerWidth / 2 + (Math.random() - 0.5) * 240,
+      innerHeight / 4,
+      (Math.random() - 0.5) * 12,
+      -6 - Math.random() * 6,
+    ));
+
+    const bits = cannon(10, 1, 90).concat(cannon(innerWidth - 10, -1, 90));
+    const start = performance.now();
+    const encoreAt = start + 350;
+    const end = start + 4500;
+    const fadeStart = end - 900;
+    let fired = false;
+
     (function frame(now) {
-      g.clearRect(0, 0, canvas.width, canvas.height);
-      bits.forEach((b) => {
-        b.vy += 0.35; b.x += b.vx; b.y += b.vy; b.r += b.vr; b.vx *= 0.99;
-        g.save(); g.translate(b.x, b.y); g.rotate(b.r); g.fillStyle = b.c; g.fillRect(-b.w / 2, -b.w / 4, b.w, b.w / 2); g.restore();
-      });
-      if (now < end) requestAnimationFrame(frame); else canvas.remove();
-    })(performance.now());
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, innerWidth, innerHeight);
+      if (!fired && now >= encoreAt) { fired = true; bits.push(...encore(60)); }
+      for (let i = 0; i < bits.length; i++) {
+        const b = bits[i];
+        b.vy += 0.22; b.vx *= 0.993; b.x += b.vx; b.y += b.vy; b.r += b.vr;
+        if (now > fadeStart) b.alpha = Math.max(0, 1 - (now - fadeStart) / 900);
+        g.save();
+        g.globalAlpha = b.alpha;
+        g.translate(b.x, b.y);
+        g.rotate(b.r);
+        g.fillStyle = b.c;
+        if (b.shape === 'rect') g.fillRect(-b.w / 2, -b.w / 3, b.w, b.w * 0.6);
+        else if (b.shape === 'circle') { g.beginPath(); g.arc(0, 0, b.w / 2.4, 0, Math.PI * 2); g.fill(); }
+        else { g.fillRect(-b.w, -1.2, b.w * 2, 2.4); }
+        g.restore();
+      }
+      if (now < end) requestAnimationFrame(frame);
+      else { canvas.remove(); window.removeEventListener('resize', onResize); }
+    })(start);
   }
 
   async function applyCode(code) {
