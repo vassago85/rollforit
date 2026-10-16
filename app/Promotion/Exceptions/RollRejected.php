@@ -21,6 +21,8 @@ class RollRejected extends RuntimeException
 
     public const CURRENCY = 'currency';
 
+    public const OWED = 'owed';
+
     public function __construct(public readonly string $reason, string $message, public readonly int $status = 422)
     {
         parent::__construct($message);

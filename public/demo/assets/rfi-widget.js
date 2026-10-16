@@ -54,7 +54,7 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const json = (r) => r.json().catch(() => ({}));
 
-  const VISIBLE_WHEN_CLOSED = ['sold_out', 'upcoming'];
+  const VISIBLE_WHEN_CLOSED = ['sold_out', 'upcoming', 'owed'];
   const visible = (status) => !!status && (status.open || VISIBLE_WHEN_CLOSED.includes(status.reason));
 
   let statusPromise = null;
@@ -242,6 +242,7 @@
       if (saved) this.showResult(saved, false);
       else if (status.reason === 'upcoming') this.renderUpcoming();
       else if (status.reason === 'sold_out') this.body.innerHTML = '<p class="rfi-msg">' + esc(status.sold_out_message) + '</p>';
+      else if (status.reason === 'owed') this.renderOwed();
       else this.renderForm();
       this.refreshCart();
       if ('IntersectionObserver' in window && wants3D()) {
@@ -279,6 +280,15 @@
       this.body.innerHTML = '<div class="rfi-stage rfi-stage--teaser" aria-hidden="true">'
         + '<div class="rfi-cssdie rfi-cssdie--idle" style="--rfi-die:' + esc(a.die_color) + ';--rfi-num:' + esc(a.number_color) + '"><span>?</span></div></div>'
         + '<p class="rfi-msg">The die is resting. Rolling opens ' + esc(this.status.next_roll.label) + '.</p>';
+    }
+
+    renderOwed() {
+      const owed = this.status.owed_roll || {};
+      const codeLine = owed.code
+        ? '<p class="rfi-note">Your previous winning code: <b>' + esc(owed.code) + '</b></p>'
+        : '';
+      this.body.innerHTML = '<p class="rfi-msg">' + esc(owed.message || 'Complete a purchase to unlock your next roll.') + '</p>'
+        + codeLine;
     }
 
     /* Counts down from the server's starts_in, so a wrong device clock doesn't matter. At zero, re-check with the server. */

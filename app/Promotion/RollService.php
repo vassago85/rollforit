@@ -22,6 +22,7 @@ class RollService
         private readonly CartPricer $pricer,
         private readonly OddsAllocator $allocator,
         private readonly DiscountCodeService $discounts,
+        private readonly RollFulfillment $fulfillment,
     ) {}
 
     /**
@@ -53,6 +54,19 @@ class RollService
             $existing = $this->existingRoll($shop, $emailHash, $phoneHash, $customerHash, $promoDate, $input->ip);
             if ($existing) {
                 return $this->present($shop, $settings, $this->ensureCode($shop, $settings, $existing), repeat: true);
+            }
+
+            // Repeat rollers must have completed a paid order since their previous roll.
+            // POS rolls skip this check because the till applies the discount immediately,
+            // so there is no abandon-the-cart loophole to close.
+            if ($input->channel === Roll::CHANNEL_ONLINE) {
+                $owed = $this->fulfillment->owedRoll($shop, $emailHash, $phoneHash, $customerHash, $input->ip, $promoDate);
+                if ($owed) {
+                    throw new RollRejected(
+                        RollRejected::OWED,
+                        'Finish checkout on your previous roll before rolling again.',
+                    );
+                }
             }
 
             $this->assertOpen($settings, $window);

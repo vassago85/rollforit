@@ -6,8 +6,10 @@ use App\Models\Shop;
 use App\Promotion\DayStats;
 use App\Promotion\Exceptions\PayoutGuardViolation;
 use App\Promotion\Exceptions\RollRejected;
+use App\Promotion\IdentityHasher;
 use App\Promotion\PreviewLinks;
 use App\Promotion\PromoWindow;
+use App\Promotion\RollFulfillment;
 use App\Promotion\RollInput;
 use App\Promotion\RollService;
 use App\Promotion\WidgetStatus;
@@ -21,7 +23,7 @@ use Illuminate\Support\Facades\Log;
  */
 class ProxyController extends Controller
 {
-    public function status(Request $request): JsonResponse
+    public function status(Request $request, RollFulfillment $fulfillment): JsonResponse
     {
         $shop = $this->shop($request);
         $settings = $shop->settingsOrCreate();
@@ -30,6 +32,7 @@ class ProxyController extends Controller
 
         $reason = null;
         $stats = null;
+        $owedRoll = null;
         if (! $test) {
             if (! $settings->enabled || ! $settings->canEnable()) {
                 $reason = 'closed';
@@ -39,6 +42,20 @@ class ProxyController extends Controller
                 $stats = DayStats::for($shop->id, $window->promoDate());
                 if ($stats->closedReason($settings) !== null) {
                     $reason = 'sold_out';
+                } else {
+                    $customerId = $request->attributes->get('logged_in_customer_id');
+                    $customerHash = $customerId ? IdentityHasher::hashShopifyCustomerId((string) $customerId) : null;
+                    $owedRoll = $fulfillment->owedRoll(
+                        $shop,
+                        emailHash: null,
+                        phoneHash: null,
+                        customerHash: $customerHash,
+                        ip: $request->attributes->get('customer_ip'),
+                        today: $window->promoDate(),
+                    );
+                    if ($owedRoll) {
+                        $reason = 'owed';
+                    }
                 }
             }
         } elseif (! $settings->min_order || ! $settings->max_payout) {
@@ -46,7 +63,7 @@ class ProxyController extends Controller
         }
 
         $next = null;
-        if (! $test && $reason !== 'closed' && $settings->show_countdown) {
+        if (! $test && $reason !== 'closed' && $reason !== 'owed' && $settings->show_countdown) {
             $next = $window->nextOpening(skipToday: $reason !== 'upcoming');
         }
 
@@ -63,6 +80,7 @@ class ProxyController extends Controller
             test: $test,
             loggedIn: $request->attributes->get('logged_in_customer_id') !== null,
             stats: $stats,
+            owedRoll: $owedRoll,
         ));
     }
 

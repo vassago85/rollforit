@@ -4,6 +4,7 @@ use App\Models\PrivacyRequest;
 use App\Models\Roll;
 use App\Models\Shop;
 use App\Promotion\EmailHasher;
+use App\Promotion\IdentityHasher;
 use Illuminate\Testing\TestResponse;
 
 function webhook(Shop $shop, string $topic, array $payload, ?string $hmac = null): TestResponse
@@ -85,4 +86,91 @@ it('marks the shop uninstalled and disables the promotion on app/uninstalled', f
     expect($shop->access_token)->toBeNull()
         ->and($shop->uninstalled_at)->not->toBeNull()
         ->and($shop->settings->enabled)->toBeFalse();
+});
+
+it('fulfils the most recent matching roll on orders/paid', function () {
+    $shop = makeShop();
+    $roll = Roll::create([
+        'shop_id' => $shop->id,
+        'email_hash' => EmailHasher::hash('buyer@example.com'),
+        'shopify_customer_hash' => IdentityHasher::hashShopifyCustomerId('777'),
+        'promo_date' => now()->subDays(7)->toDateString(),
+        'cart_subtotal' => 100000, 'eligible_subtotal' => 100000,
+        'picked_number' => 1, 'displayed_number' => 2,
+        'won' => false, 'payout' => 0,
+    ]);
+
+    webhook($shop, 'orders/paid', [
+        'shop_domain' => $shop->domain,
+        'admin_graphql_api_id' => 'gid://shopify/Order/5001',
+        'customer' => ['id' => 777, 'email' => 'buyer@example.com'],
+        'email' => 'buyer@example.com',
+        'browser_ip' => '203.0.113.9',
+        'created_at' => now()->toIso8601String(),
+        'test' => false,
+    ])->assertOk();
+
+    expect($roll->refresh()->fulfilled_at)->not->toBeNull()
+        ->and($roll->fulfilled_order_id)->toBe('gid://shopify/Order/5001');
+});
+
+it('matches a guest roll by browser_ip when there is no account', function () {
+    $shop = makeShop();
+    $roll = Roll::create([
+        'shop_id' => $shop->id,
+        'ip' => '198.51.100.44',
+        'promo_date' => now()->subDays(7)->toDateString(),
+        'cart_subtotal' => 100000, 'eligible_subtotal' => 100000,
+        'picked_number' => 1, 'displayed_number' => 2,
+        'won' => false, 'payout' => 0,
+    ]);
+
+    webhook($shop, 'orders/paid', [
+        'shop_domain' => $shop->domain,
+        'admin_graphql_api_id' => 'gid://shopify/Order/5002',
+        'email' => '',
+        'browser_ip' => '198.51.100.44',
+        'created_at' => now()->toIso8601String(),
+        'test' => false,
+    ])->assertOk();
+
+    expect($roll->refresh()->fulfilled_at)->not->toBeNull();
+});
+
+it('ignores test orders', function () {
+    $shop = makeShop();
+    $roll = rollFor($shop, 'buyer@example.com');
+
+    webhook($shop, 'orders/paid', [
+        'shop_domain' => $shop->domain,
+        'admin_graphql_api_id' => 'gid://shopify/Order/5003',
+        'email' => 'buyer@example.com',
+        'created_at' => now()->toIso8601String(),
+        'test' => true,
+    ])->assertOk();
+
+    expect($roll->refresh()->fulfilled_at)->toBeNull();
+});
+
+it('re-locks a roll when the order is cancelled', function () {
+    $shop = makeShop();
+    $roll = Roll::create([
+        'shop_id' => $shop->id,
+        'email_hash' => EmailHasher::hash('buyer@example.com'),
+        'promo_date' => now()->subDays(7)->toDateString(),
+        'cart_subtotal' => 100000, 'eligible_subtotal' => 100000,
+        'picked_number' => 1, 'displayed_number' => 2,
+        'won' => false, 'payout' => 0,
+        'fulfilled_at' => now(),
+        'fulfilled_order_id' => 'gid://shopify/Order/5004',
+    ]);
+
+    webhook($shop, 'orders/cancelled', [
+        'shop_domain' => $shop->domain,
+        'admin_graphql_api_id' => 'gid://shopify/Order/5004',
+    ])->assertOk();
+
+    $roll->refresh();
+    expect($roll->fulfilled_at)->toBeNull()
+        ->and($roll->fulfilled_order_id)->toBeNull();
 });

@@ -7,6 +7,8 @@ use App\Models\Roll;
 use App\Models\Shop;
 use App\Promotion\EmailHasher;
 use App\Promotion\IdentityHasher;
+use App\Promotion\RollFulfillment;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +16,8 @@ use Illuminate\Support\Facades\Log;
 
 class WebhookController extends Controller
 {
+    public function __construct(private readonly RollFulfillment $fulfillment) {}
+
     public function handle(Request $request): Response
     {
         $topic = (string) $request->header('X-Shopify-Topic', '');
@@ -26,6 +30,8 @@ class WebhookController extends Controller
 
         match ($topic) {
             'app/uninstalled' => $this->uninstalled($shop),
+            'orders/paid' => $this->orderPaid($shop, $request),
+            'orders/cancelled' => $this->orderCancelled($shop, $request),
             'customers/data_request' => $this->dataRequest($shop, $request),
             'customers/redact' => $this->customerRedact($shop, $request),
             'shop/redact' => $this->shopRedact($shop),
@@ -33,6 +39,53 @@ class WebhookController extends Controller
         };
 
         return response('', 200);
+    }
+
+    /**
+     * A paid order unlocks the roller's next roll. We ignore test / cancelled orders;
+     * cancelled orders are handled by their own topic, and tests must never affect state.
+     */
+    private function orderPaid(Shop $shop, Request $request): void
+    {
+        if ($request->boolean('test') || $request->input('cancelled_at')) {
+            return;
+        }
+
+        $orderId = (string) $request->input('admin_graphql_api_id', '');
+        if ($orderId === '') {
+            return;
+        }
+
+        $customerId = trim((string) $request->input('customer.id', ''));
+        $customerHash = $customerId !== '' ? IdentityHasher::hashShopifyCustomerId($customerId) : null;
+        $email = trim((string) ($request->input('customer.email') ?? $request->input('email', '')));
+        $emailHash = $email !== '' ? EmailHasher::hash($email) : null;
+        $ip = (string) $request->input('browser_ip', '');
+        $ip = $ip !== '' ? $ip : null;
+
+        $placedAt = CarbonImmutable::parse((string) ($request->input('created_at') ?? now()->toIso8601String()));
+
+        $roll = $this->fulfillment->markOrderPaid($shop, $orderId, $emailHash, $customerHash, $ip, $placedAt);
+
+        Log::info('Roll4It orders/paid processed', [
+            'shop' => $shop->domain,
+            'order' => $orderId,
+            'matched_roll' => $roll?->id,
+        ]);
+    }
+
+    private function orderCancelled(Shop $shop, Request $request): void
+    {
+        $orderId = (string) $request->input('admin_graphql_api_id', '');
+        $cleared = $this->fulfillment->markOrderCancelled($shop, $orderId);
+
+        if ($cleared > 0) {
+            Log::info('Roll4It orders/cancelled re-locked rolls', [
+                'shop' => $shop->domain,
+                'order' => $orderId,
+                'rolls' => $cleared,
+            ]);
+        }
     }
 
     private function uninstalled(Shop $shop): void

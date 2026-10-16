@@ -2,6 +2,7 @@
 
 namespace App\Promotion;
 
+use App\Models\Roll;
 use App\Models\Shop;
 use App\Models\ShopSettings;
 use App\Support\Money;
@@ -24,6 +25,7 @@ final class WidgetStatus
         bool $test,
         bool $loggedIn,
         ?DayStats $stats,
+        ?Roll $owedRoll = null,
     ): array {
         $symbol = Money::symbolFor($shop->currency);
 
@@ -72,6 +74,14 @@ final class WidgetStatus
                 'celebration' => (bool) $settings->celebration_enabled,
             ],
             'drawer_selector' => $settings->drawer_selector,
+            'owed_roll' => $owedRoll ? [
+                'won' => (bool) $owedRoll->won,
+                'promo_date' => $owedRoll->promo_date?->toDateString(),
+                'code' => $owedRoll->won && $owedRoll->code_status === Roll::CODE_CREATED ? $owedRoll->discount_code : null,
+                'message' => $owedRoll->won
+                    ? 'Use your winning code at checkout to unlock your next roll.'
+                    : 'Complete a purchase to unlock your next roll.',
+            ] : null,
         ];
     }
 }

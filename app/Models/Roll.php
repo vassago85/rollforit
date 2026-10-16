@@ -40,6 +40,7 @@ class Roll extends Model
             'discount_ends_at' => 'datetime',
             'is_test' => 'boolean',
             'position' => 'integer',
+            'fulfilled_at' => 'datetime',
         ];
     }
 
