@@ -8,6 +8,7 @@
     .rfi-lab-diag dt { color: #475569; }
     .rfi-lab-diag dd { margin: 0; font-weight: 600; }
     .rfi-lab-diag dd.hit { color: #0b6b3b; }
+    .rfi-lab-diag dd.warn { color: #b45309; font-weight: 700; }
     .rfi-lab-note { margin: 0 0 12px; font-size: 0.9em; color: #475569; }
 
     .rfi-casino {
@@ -109,6 +110,18 @@
                         </dl>
                     </s-stack>
                 </s-box>
+
+                <s-box padding="base" background="subdued" borderRadius="base" style="margin-top:16px">
+                    <s-stack gap="small-200">
+                        <s-text font-weight="bold">What the widget sees</s-text>
+                        <p class="rfi-lab-note" style="margin:0">The actual dice count and pick range the widget just drew. If this disagrees with the Current caps card above, the widget is out of sync — fix it by starting a new roll.</p>
+                        <dl class="rfi-lab-diag" id="lab-seen">
+                            <dt>Dice drawn</dt><dd id="lab-seen-dice">waiting for the widget…</dd>
+                            <dt>Pick buttons</dt><dd id="lab-seen-range">—</dd>
+                            <dt>Roll button</dt><dd id="lab-seen-label">—</dd>
+                        </dl>
+                    </s-stack>
+                </s-box>
             </div>
 
             <div class="rfi-casino" id="lab-casino">
@@ -195,6 +208,25 @@
     el('lab-tally-paid').textContent = tally.rolls ? centsToMoney(tally.paid, state.shop.symbol) : '-';
   }
 
+  /* Fed by the `rendered` message the iframe posts after every pick-form draw.
+     Compare what the widget actually drew to what the shop's settings say and
+     flag any disagreement, so a dice_count=2 shop never silently renders a
+     1-die grid without the merchant noticing. */
+  function renderSeen(seen) {
+    if (!state) return;
+    const s = state.settings;
+    const diceOk = Number(seen.dice_count) === Number(s.dice_count);
+    const rangeOk = Number(seen.pick_min) === Number(s.pick_range.min) && Number(seen.pick_max) === Number(s.pick_range.max);
+    const warn = (txt, ok) => ok ? esc(txt) : '⚠ ' + esc(txt) + ' (settings say ';
+    el('lab-seen-dice').textContent = (diceOk ? '' : '⚠ ') + seen.dice_count + (seen.dice_count === 2 ? ' dice' : ' die')
+      + (diceOk ? '' : ' — settings say ' + s.dice_count);
+    el('lab-seen-range').textContent = (rangeOk ? '' : '⚠ ') + seen.pick_min + '–' + seen.pick_max + ' (' + seen.pick_count + ' buttons)'
+      + (rangeOk ? '' : ' — settings say ' + s.pick_range.min + '–' + s.pick_range.max);
+    el('lab-seen-label').textContent = seen.roll_button_label || '—';
+    el('lab-seen-dice').className = diceOk ? '' : 'warn';
+    el('lab-seen-range').className = rangeOk ? '' : 'warn';
+  }
+
   function renderDiagnostics(d, result) {
     el('lab-diag-section').hidden = false;
     const rows = [
@@ -245,6 +277,11 @@
     if (!state || !state.widget) return;
     landing = null;
     setTable(null, pickCopy());
+    el('lab-seen-dice').textContent = 'waiting for the widget…';
+    el('lab-seen-dice').className = '';
+    el('lab-seen-range').textContent = '—';
+    el('lab-seen-range').className = '';
+    el('lab-seen-label').textContent = '—';
     send({ type: 'config', config: frameConfig() });
   }
 
@@ -291,6 +328,7 @@
     else if (msg.type === 'height') frame.style.height = Math.max(320, msg.value) + 'px';
     else if (msg.type === 'roll') onRoll(msg);
     else if (msg.type === 'landed') onLanded();
+    else if (msg.type === 'rendered') renderSeen(msg.rendered);
     else if (msg.type === 'share') toast('On a real win the customer shares: "' + msg.text + '"');
   });
 

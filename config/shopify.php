@@ -34,6 +34,10 @@ return [
     'retention' => [
         'roll_years' => (int) env('ROLL_RETENTION_YEARS', 3),
         'ip_days' => (int) env('ROLL_IP_RETENTION_DAYS', 90),
+        // Email verification attempts contain the plain email, so we keep them for
+        // a short window — long enough to debug delivery issues, short enough to
+        // honour the "we don't hoard emails" posture in the terms page.
+        'verify_attempt_days' => (int) env('ROLL_VERIFY_ATTEMPT_DAYS', 30),
     ],
 
     'test_mode' => [

@@ -1,15 +1,15 @@
 <?php
 
 use App\Models\Block;
+use App\Models\EmailVerifyAttempt;
+use App\Models\Roll;
 use App\Models\Shop;
 use App\Models\TermsVersion;
+use App\Promotion\EmailHasher;
 use Illuminate\Support\Facades\Http;
-use Tests\TestCase;
 
-function admin(Shop $shop): TestCase
-{
-    return test()->withHeaders(['Authorization' => 'Bearer '.idToken($shop), 'Accept' => 'application/json']);
-}
+// admin() lives in tests/Pest.php so ParaTest workers that only load
+// SimulatorTest.php or AppProxyTest.php still see it.
 
 /**
  * @return array<string, mixed>
@@ -234,4 +234,139 @@ it('shows reporting with block progress but never the winning position', functio
         ->getContent();
 
     expect($content)->not->toContain('winning_position');
+});
+
+it('includes recent email verification attempts in the reporting payload', function () {
+    $shop = makeShop();
+
+    // Three attempts: one successful send, one invalid-email send, one wrong-code verify.
+    EmailVerifyAttempt::create([
+        'shop_id' => $shop->id, 'email' => 'ok@example.com', 'ip' => '198.51.100.1',
+        'action' => 'send', 'outcome' => 'queued',
+    ]);
+    EmailVerifyAttempt::create([
+        'shop_id' => $shop->id, 'email' => 'not-an-email', 'ip' => '198.51.100.2',
+        'action' => 'send', 'outcome' => 'invalid_email',
+    ]);
+    EmailVerifyAttempt::create([
+        'shop_id' => $shop->id, 'email' => 'ok@example.com', 'ip' => '198.51.100.1',
+        'action' => 'verify', 'outcome' => 'wrong_code', 'attempt_number' => 2,
+    ]);
+
+    $payload = admin($shop)->getJson('/api/admin/reporting')->assertOk()->json('verify_attempts');
+
+    expect($payload['window_days'])->toBe(7)
+        // Key order is not guaranteed across DB drivers; compare the contents.
+        ->and($payload['totals']['send'])->toEqualCanonicalizing(['queued' => 1, 'invalid_email' => 1])
+        ->and($payload['totals']['verify'])->toBe(['wrong_code' => 1])
+        ->and($payload['recent'])->toHaveCount(3);
+
+    // Newest first, with email + outcome exposed to the merchant.
+    expect($payload['recent'][0]['email'])->toBe('ok@example.com')
+        ->and($payload['recent'][0]['action'])->toBe('verify')
+        ->and($payload['recent'][0]['outcome'])->toBe('wrong_code')
+        ->and($payload['recent'][0]['attempt_number'])->toBe(2)
+        ->and($payload['recent'][0]['success'])->toBeFalse()
+        ->and($payload['recent'][2]['outcome'])->toBe('queued')
+        ->and($payload['recent'][2]['success'])->toBeTrue();
+});
+
+it('does not leak another shop\'s verify attempts into reporting', function () {
+    $shopA = makeShop();
+    $shopB = makeShop();
+
+    EmailVerifyAttempt::create([
+        'shop_id' => $shopB->id, 'email' => 'other@example.com',
+        'action' => 'send', 'outcome' => 'queued',
+    ]);
+
+    $payload = admin($shopA)->getJson('/api/admin/reporting')->assertOk()->json('verify_attempts');
+
+    expect($payload['recent'])->toBe([])
+        ->and($payload['totals']['send'])->toBe([])
+        ->and($payload['totals']['verify'])->toBe([]);
+});
+
+/* The merchant's "Rolls today" view must distinguish between prizes ISSUED
+ * (every winning code we created) and prizes CONVERTED (codes that were
+ * actually spent in a paid order). Without this split, the merchant sees
+ * "3 winners · R3,000" and assumes the store took a R3,000 hit when the real
+ * cost may be R2,000 because one winner never checked out. */
+it('reports redeemed vs issued separately on today, per channel, and per row', function () {
+    $shop = makeShop();
+    $today = now('Africa/Johannesburg')->toDateString();
+
+    $base = [
+        'shop_id' => $shop->id,
+        'promo_date' => $today,
+        'cart_subtotal' => 80000, 'eligible_subtotal' => 80000,
+        'picked_number' => 1, 'displayed_number' => 1,
+        'won' => true, 'code_status' => Roll::CODE_CREATED,
+        'channel' => Roll::CHANNEL_ONLINE,
+    ];
+    // Online: 2 winners worth R500 + R1000 issued; only the R500 one redeemed.
+    Roll::create(array_merge($base, ['email_hash' => EmailHasher::hash('a@example.com'),
+        'payout' => 50000, 'discount_code' => 'ROLL-A1', 'redeemed_at' => now(),
+        'redeemed_order_id' => 'gid://shopify/Order/1', 'redeemed_amount' => 50000]));
+    Roll::create(array_merge($base, ['email_hash' => EmailHasher::hash('b@example.com'),
+        'payout' => 100000, 'discount_code' => 'ROLL-B2']));
+    // Online loser (counts to rolls, not winners / not redeemed).
+    Roll::create(array_merge($base, ['email_hash' => EmailHasher::hash('c@example.com'),
+        'won' => false, 'payout' => 0, 'discount_code' => null, 'displayed_number' => 2,
+        'code_status' => Roll::CODE_NONE]));
+    // POS win that got applied at the till (counted but not "redeemed" by code).
+    Roll::create(array_merge($base, ['email_hash' => EmailHasher::hash('p@example.com'),
+        'payout' => 25000, 'discount_code' => 'ROLL-P3', 'channel' => Roll::CHANNEL_POS]));
+
+    $payload = admin($shop)->getJson('/api/admin/reporting')->assertOk()->json();
+
+    // today card: 3 winners total (2 online + 1 POS), 1 redeemed for R500.
+    expect($payload['today']['winners'])->toBe(3)
+        ->and($payload['today']['payout'])->toBe(175000)
+        ->and($payload['today']['redeemed_count'])->toBe(1)
+        ->and($payload['today']['redeemed'])->toBe(50000);
+
+    // Per-channel breakdown: online shows 1 of 2 converted; POS shows 0 of 1.
+    expect($payload['channel_breakdown']['online']['winners'])->toBe(2)
+        ->and($payload['channel_breakdown']['online']['payout'])->toBe(150000)
+        ->and($payload['channel_breakdown']['online']['redeemed_count'])->toBe(1)
+        ->and($payload['channel_breakdown']['online']['redeemed'])->toBe(50000)
+        ->and($payload['channel_breakdown']['pos']['winners'])->toBe(1)
+        ->and($payload['channel_breakdown']['pos']['redeemed_count'])->toBe(0);
+
+    // Per-row annotation: ROLL-A1 shows a redeemed_amount, ROLL-B2 does not.
+    $byCode = collect($payload['recent'])->keyBy('code');
+    expect($byCode['ROLL-A1']['redeemed_amount'])->toBe(50000)
+        ->and($byCode['ROLL-A1']['redeemed_amount_formatted'])->toBe('R500')
+        ->and($byCode['ROLL-B2']['redeemed_amount'])->toBeNull()
+        ->and($byCode['ROLL-B2']['redeemed_at'])->toBeNull();
+});
+
+/* History rows must also carry redemption so merchants can see the gap over
+ * time, not just today — a shop whose win codes rarely convert is a different
+ * conversation from one where every code is spent. */
+it('includes redemption counts and totals on each history day', function () {
+    $shop = makeShop();
+    $yesterday = now('Africa/Johannesburg')->subDay()->toDateString();
+
+    $base = [
+        'shop_id' => $shop->id, 'promo_date' => $yesterday,
+        'cart_subtotal' => 60000, 'eligible_subtotal' => 60000,
+        'picked_number' => 1, 'displayed_number' => 1,
+        'won' => true, 'code_status' => Roll::CODE_CREATED, 'channel' => Roll::CHANNEL_ONLINE,
+    ];
+    Roll::create(array_merge($base, ['email_hash' => EmailHasher::hash('h1@example.com'),
+        'payout' => 30000, 'discount_code' => 'ROLL-H1',
+        'redeemed_at' => now()->subDay(), 'redeemed_order_id' => 'gid://shopify/Order/100', 'redeemed_amount' => 30000]));
+    Roll::create(array_merge($base, ['email_hash' => EmailHasher::hash('h2@example.com'),
+        'payout' => 40000, 'discount_code' => 'ROLL-H2']));
+
+    $history = admin($shop)->getJson('/api/admin/reporting')->assertOk()->json('history');
+    $row = collect($history)->firstWhere('promo_date', $yesterday);
+
+    expect($row['winners'])->toBe(2)
+        ->and($row['payout'])->toBe(70000)
+        ->and($row['redeemed_count'])->toBe(1)
+        ->and($row['redeemed'])->toBe(30000)
+        ->and($row['redeemed_formatted'])->toBe('R300');
 });

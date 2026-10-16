@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Block;
+use App\Models\EmailVerifyAttempt;
 use App\Models\PrivacyRequest;
 use App\Models\Roll;
 use App\Models\Shop;
@@ -36,7 +37,11 @@ class ReportingController extends Controller
 
         $history = Roll::where('shop_id', $shop->id)->where('is_test', false)
             ->select('promo_date')
-            ->selectRaw('count(*) as rolls, count(*) filter (where won) as winners, coalesce(sum(payout) filter (where won), 0) as payout')
+            ->selectRaw('count(*) as rolls')
+            ->selectRaw('count(*) filter (where won) as winners')
+            ->selectRaw('coalesce(sum(payout) filter (where won), 0) as payout')
+            ->selectRaw('count(*) filter (where won and redeemed_at is not null) as redeemed_count')
+            ->selectRaw('coalesce(sum(redeemed_amount) filter (where won and redeemed_at is not null), 0) as redeemed')
             ->groupBy('promo_date')->orderByDesc('promo_date')->limit(90)->get()
             ->map(fn ($row) => [
                 'promo_date' => CarbonImmutable::parse($row->promo_date)->toDateString(),
@@ -44,6 +49,9 @@ class ReportingController extends Controller
                 'winners' => (int) $row->winners,
                 'payout' => (int) $row->payout,
                 'payout_formatted' => Money::format((int) $row->payout, $symbol),
+                'redeemed_count' => (int) $row->redeemed_count,
+                'redeemed' => (int) $row->redeemed,
+                'redeemed_formatted' => Money::format((int) $row->redeemed, $symbol),
             ]);
 
         $channel = $request->query('channel');
@@ -66,19 +74,37 @@ class ReportingController extends Controller
                 'code' => $r->discount_code,
                 'code_status' => $r->code_status,
                 'test' => $r->is_test,
+                // Null for losing rolls and for winning rolls whose code has not
+                // been used in a paid order yet. The UI shows "Redeemed Rxyz" on
+                // winners with a value, "Not redeemed yet" on winners without.
+                'redeemed_at' => $r->redeemed_at?->setTimezone($shop->timezone)->format('H:i:s'),
+                'redeemed_amount' => $r->redeemed_amount !== null ? (int) $r->redeemed_amount : null,
+                'redeemed_amount_formatted' => $r->redeemed_amount !== null ? Money::format((int) $r->redeemed_amount, $symbol) : null,
             ]);
 
         $channelBreakdown = Roll::where('shop_id', $shop->id)
             ->whereDate('promo_date', $today)
             ->where('is_test', false)
-            ->selectRaw('channel, count(*) as rolls, count(*) filter (where won) as winners, coalesce(sum(payout) filter (where won), 0) as payout')
+            ->selectRaw('channel, count(*) as rolls')
+            ->selectRaw('count(*) filter (where won) as winners')
+            ->selectRaw('coalesce(sum(payout) filter (where won), 0) as payout')
+            ->selectRaw('count(*) filter (where won and redeemed_at is not null) as redeemed_count')
+            ->selectRaw('coalesce(sum(redeemed_amount) filter (where won and redeemed_at is not null), 0) as redeemed')
             ->groupBy('channel')->get()
             ->mapWithKeys(fn ($row) => [$row->channel => [
                 'rolls' => (int) $row->rolls,
                 'winners' => (int) $row->winners,
                 'payout' => (int) $row->payout,
                 'payout_formatted' => Money::format((int) $row->payout, $symbol),
+                'redeemed_count' => (int) $row->redeemed_count,
+                'redeemed' => (int) $row->redeemed,
+                'redeemed_formatted' => Money::format((int) $row->redeemed, $symbol),
             ]])->all();
+
+        $todayRedeemed = (int) ($channelBreakdown[Roll::CHANNEL_ONLINE]['redeemed'] ?? 0)
+            + (int) ($channelBreakdown[Roll::CHANNEL_POS]['redeemed'] ?? 0);
+        $todayRedeemedCount = (int) ($channelBreakdown[Roll::CHANNEL_ONLINE]['redeemed_count'] ?? 0)
+            + (int) ($channelBreakdown[Roll::CHANNEL_POS]['redeemed_count'] ?? 0);
 
         return response()->json([
             'today' => [
@@ -89,6 +115,9 @@ class ReportingController extends Controller
                 'winners' => $stats->winners,
                 'payout' => $stats->payout,
                 'payout_formatted' => Money::format($stats->payout, $symbol),
+                'redeemed_count' => $todayRedeemedCount,
+                'redeemed' => $todayRedeemed,
+                'redeemed_formatted' => Money::format($todayRedeemed, $symbol),
                 'daily_budget_formatted' => $settings->daily_budget ? Money::format($settings->daily_budget, $symbol) : null,
                 'budget_remaining_formatted' => $stats->budgetRemaining($settings) !== null
                     ? Money::format($stats->budgetRemaining($settings), $symbol) : null,
@@ -105,8 +134,12 @@ class ReportingController extends Controller
             'recent' => $recent,
             'recent_channel' => $channel,
             'channel_breakdown' => [
-                Roll::CHANNEL_ONLINE => $channelBreakdown[Roll::CHANNEL_ONLINE] ?? ['rolls' => 0, 'winners' => 0, 'payout' => 0, 'payout_formatted' => Money::format(0, $symbol)],
-                Roll::CHANNEL_POS => $channelBreakdown[Roll::CHANNEL_POS] ?? ['rolls' => 0, 'winners' => 0, 'payout' => 0, 'payout_formatted' => Money::format(0, $symbol)],
+                Roll::CHANNEL_ONLINE => $channelBreakdown[Roll::CHANNEL_ONLINE]
+                    ?? ['rolls' => 0, 'winners' => 0, 'payout' => 0, 'payout_formatted' => Money::format(0, $symbol),
+                        'redeemed_count' => 0, 'redeemed' => 0, 'redeemed_formatted' => Money::format(0, $symbol)],
+                Roll::CHANNEL_POS => $channelBreakdown[Roll::CHANNEL_POS]
+                    ?? ['rolls' => 0, 'winners' => 0, 'payout' => 0, 'payout_formatted' => Money::format(0, $symbol),
+                        'redeemed_count' => 0, 'redeemed' => 0, 'redeemed_formatted' => Money::format(0, $symbol)],
             ],
             'privacy_requests' => PrivacyRequest::where('shop_id', $shop->id)->orderByDesc('id')->limit(50)->get()
                 ->map(fn (PrivacyRequest $p) => [
@@ -115,7 +148,56 @@ class ReportingController extends Controller
                     'matched_rolls' => $p->matched_rolls,
                     'received_at' => $p->created_at->toIso8601String(),
                 ]),
+            'verify_attempts' => $this->verifyAttempts($shop),
         ]);
+    }
+
+    /**
+     * Recent email-verification attempts (both sends and verifies, success and
+     * failure). Rolls themselves only keep a hashed email for POPIA reasons, so
+     * this is the only place a merchant can see "who tried, which email, which
+     * failure mode". Capped at 200 rows / 7 days for the UI; the full history
+     * sits in email_verify_attempts for support/export.
+     */
+    private function verifyAttempts(Shop $shop): array
+    {
+        $since = CarbonImmutable::now($shop->timezone)->subDays(7)->utc();
+
+        $rows = EmailVerifyAttempt::where('shop_id', $shop->id)
+            ->where('created_at', '>=', $since)
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get()
+            ->map(fn (EmailVerifyAttempt $a) => [
+                'time' => $a->created_at->setTimezone($shop->timezone)->format('Y-m-d H:i:s'),
+                'email' => $a->email,
+                'ip' => $a->ip,
+                'action' => $a->action,
+                'outcome' => $a->outcome,
+                'attempt_number' => $a->attempt_number,
+                'success' => in_array($a->outcome, ['queued', 'confirmed'], true),
+            ]);
+
+        // Per-outcome tallies for the summary line above the table. We tally the
+        // whole 7-day window (not just the capped list) so the counts are honest
+        // even when there's more volume than we display.
+        $totals = EmailVerifyAttempt::where('shop_id', $shop->id)
+            ->where('created_at', '>=', $since)
+            ->selectRaw('action, outcome, count(*) as c')
+            ->groupBy('action', 'outcome')
+            ->get()
+            ->groupBy('action')
+            ->map(fn ($group) => $group->mapWithKeys(fn ($row) => [$row->outcome => (int) $row->c])->all())
+            ->all();
+
+        return [
+            'window_days' => 7,
+            'recent' => $rows,
+            'totals' => [
+                'send' => $totals['send'] ?? [],
+                'verify' => $totals['verify'] ?? [],
+            ],
+        ];
     }
 
     public function metrics(Request $request): JsonResponse

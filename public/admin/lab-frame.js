@@ -1,4 +1,20 @@
-/* Test lab frame: runs the real storefront widget. The admin page answers the app proxy and cart calls, because only it holds the session token. */
+/*
+ * Test-lab iframe glue. The right-hand pane of the Test lab is the REAL
+ * storefront widget bundle running inside this iframe. Our job is:
+ *
+ *   1. Monkey-patch window.fetch so `/apps/roll-for-it/*` and `/cart*` calls
+ *      resolve against the parent's config instead of hitting the network.
+ *      The widget's first getStatus() awaits our `ready` Promise, so even
+ *      though the bundle loads synchronously it can't boot with stale defaults.
+ *   2. On a `config` message, update config and (if the widget has already
+ *      booted) tear the widget host down and re-mount so dice_count /
+ *      pick_range changes always take effect. The widget's own init(true)
+ *      short-circuits on `busy`, so we never trust it.
+ *   3. After each pick-form render, post a `rendered` message back to the
+ *      parent with the dice_count / pick_range the widget actually drew. The
+ *      parent displays this as "What the widget sees" so a settings↔widget
+ *      disagreement is impossible to miss.
+ */
 (() => {
   const RESULT_KEY = 'rfi_result';
   const STREAK_KEY = 'rfi_streak';
@@ -6,13 +22,14 @@
   let seq = 0;
   let config = null;
   let rolling = false;
-  let configured;
-  const ready = new Promise((resolve) => { configured = resolve; });
+  let resolveReady;
+  const ready = new Promise((resolve) => { resolveReady = resolve; });
 
   const post = (msg) => parent.postMessage(Object.assign({ source: 'rfi-lab-frame' }, msg), location.origin);
   const json = (data, status) => new Response(JSON.stringify(data), { status: status || 200, headers: { 'Content-Type': 'application/json' } });
+  const widgetHost = () => document.querySelector('[data-rfi]');
   const widget = () => {
-    const host = document.querySelector('[data-rfi]');
+    const host = widgetHost();
     return host && host.__rfi;
   };
 
@@ -25,10 +42,10 @@
     };
   }
 
-  /* Seed the streak so this roll lands on the requested day count, and forget any earlier lab result.
-     The widget stores results in localStorage now (so storefront customers can't dodge the per-day
-     limit by closing the browser), so the lab clears from both stores to stay compatible with any
-     older cached asset bundle a merchant's browser might still be holding. */
+  /* Seed the streak so this roll lands on the requested day count, and forget any
+     earlier lab result. The widget stores results in localStorage now (so storefront
+     customers can't dodge the per-day limit by closing the browser), so the lab
+     clears both for backwards compatibility with older cached bundles. */
   function clearTable() {
     sessionStorage.removeItem(RESULT_KEY);
     localStorage.removeItem(RESULT_KEY);
@@ -69,7 +86,9 @@
     return realFetch(input, init);
   };
 
-  /* The widget names the site it runs on, which here is the app's domain. Swap in the shop's storefront and show the merchant the message instead of sharing it. */
+  /* The widget names the site it runs on, which here is the app's domain. Rewrite
+     any share messages to use the shop's storefront host, and route the share
+     intent back to the parent instead of actually opening a window. */
   function share(text) {
     if (config && config.storefront_url) {
       const store = new URL(config.storefront_url);
@@ -90,14 +109,63 @@
     return realOpen.apply(window, arguments);
   };
 
-  /* The widget has no result hook, so watch for its result message to know when the die has landed. */
+  /* Read what the widget just drew and tell the parent. The parent surfaces this
+     as "What the widget sees" so merchants can spot immediately when the widget
+     has fallen out of sync with settings (the original 2-dice-stuck-on-1 bug). */
+  let lastReportedKey = null;
+  function reportRender() {
+    const host = widgetHost();
+    if (!host) return;
+    const grid = host.querySelector('.rfi-grid');
+    if (!grid) return;
+    const buttons = Array.from(grid.querySelectorAll('.rfi-num'));
+    if (buttons.length === 0) return;
+    const picks = buttons.map((b) => Number(b.dataset.n)).filter((n) => !Number.isNaN(n));
+    if (picks.length === 0) return;
+    const w = widget();
+    const dice = (w && w.status && w.status.dice_count) || (picks.length === 11 && picks[0] === 2 ? 2 : 1);
+    const key = dice + '|' + Math.min(...picks) + '|' + Math.max(...picks) + '|' + picks.length;
+    if (key === lastReportedKey) return;
+    lastReportedKey = key;
+    post({
+      type: 'rendered',
+      rendered: {
+        dice_count: dice,
+        pick_min: Math.min(...picks),
+        pick_max: Math.max(...picks),
+        pick_count: picks.length,
+        roll_button_label: (host.querySelector('.rfi-roll') || {}).textContent || null,
+      },
+    });
+  }
+
+  /* The widget has no public result hook, so watch the DOM for its result message
+     to tell the parent when the die has landed. The same observer handles the
+     render-report callback above. */
   new MutationObserver(() => {
-    if (!rolling) return;
-    const msg = document.querySelector('.rfi-msg--win, .rfi-msg--lose');
-    if (!msg) return;
-    rolling = false;
-    post({ type: 'landed', won: msg.classList.contains('rfi-msg--win') });
+    if (rolling) {
+      const msg = document.querySelector('.rfi-msg--win, .rfi-msg--lose');
+      if (msg) {
+        rolling = false;
+        post({ type: 'landed', won: msg.classList.contains('rfi-msg--win') });
+      }
+    }
+    reportRender();
   }).observe(document.documentElement, { childList: true, subtree: true });
+
+  /* Reload the iframe on every config change after the first. The widget caches
+     the status response in a MODULE-SCOPED `statusPromise`, so even a fresh
+     [data-rfi] host, a Widget constructor and an init() call all resolve
+     against the ORIGINAL status (dice_count=2 stays dice_count=2 even after
+     settings change to 1). The only way to drop that cache is to drop the
+     bundle's IIFE scope entirely, i.e. reload the iframe. Nuclear but correct:
+     the parent re-posts the latest config on the fresh frame's `hello`. */
+  function remountWidget() {
+    // Mark the frame as awaiting a reload so the parent knows to re-send its
+    // config after the fresh `hello`. The parent stores the latest config
+    // regardless, so we just need to kick a reload.
+    location.reload();
+  }
 
   window.addEventListener('message', (e) => {
     if (e.source !== parent || e.origin !== location.origin) return;
@@ -108,9 +176,11 @@
       const first = config === null;
       config = msg.config;
       clearTable();
-      if (first) { configured(); return; }
-      const w = widget();
-      if (w && !w.busy) w.init(true);
+      if (first) {
+        resolveReady();
+      } else {
+        remountWidget();
+      }
     } else if (msg.type === 'cart' && config) {
       config.cart = msg.cart;
       window.fetch('/cart/change.js', { method: 'POST' });

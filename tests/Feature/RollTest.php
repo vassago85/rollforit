@@ -2,43 +2,17 @@
 
 use App\Models\Block;
 use App\Models\Roll;
-use App\Models\Shop;
 use App\Models\TermsVersion;
 use App\Promotion\EmailHasher;
 use App\Promotion\PreviewLinks;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Testing\TestResponse;
 
-function roll(Shop $shop, array $payload = [], array $headers = []): TestResponse
-{
-    return test()->withHeaders($headers + ['Accept' => 'application/json'])
-        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload($payload));
-}
-
-function forceNextWin(Shop $shop): Block
-{
-    return Block::create(['shop_id' => $shop->id, 'size' => 10, 'winning_position' => 1, 'next_position' => 1]);
-}
-
-function forceNextLoss(Shop $shop): Block
-{
-    return Block::create(['shop_id' => $shop->id, 'size' => 10, 'winning_position' => 10, 'next_position' => 1]);
-}
-
-function winnerToday(Shop $shop, int $payout): Roll
-{
-    return Roll::create([
-        'shop_id' => $shop->id,
-        'email_hash' => bin2hex(random_bytes(32)),
-        'promo_date' => now('Africa/Johannesburg')->toDateString(),
-        'cart_subtotal' => $payout, 'eligible_subtotal' => $payout,
-        'picked_number' => 1, 'displayed_number' => 1,
-        'won' => true, 'payout' => $payout, 'discount_code' => 'ROLL-OLD'.random_int(100, 999),
-        'code_status' => Roll::CODE_CREATED,
-    ]);
-}
+// roll(), forceNextWin(), forceNextLoss() and winnerToday() all live in
+// tests/Pest.php so ParaTest workers that only load PosRollTest.php or
+// OwedRollTest.php still see them (a sibling file's helpers aren't shared
+// between parallel processes).
 
 it('allows one roll per email per promo day and returns the stored result on repeat', function () {
     $shop = makeShop();

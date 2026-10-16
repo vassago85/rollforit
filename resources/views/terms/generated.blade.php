@@ -79,6 +79,7 @@
 <h3>8. Your information</h3>
 <ul>
     <li>If you are signed in, we store a one-way hash of your store account id. If you are a guest (or rolling in store), we store a one-way hash of the email or phone number you give us. These are used only to enforce one roll per promo day and are never used for marketing.</li>
+    <li>When you request a confirmation code, we also keep a short log entry with the email address, your IP address and whether the code was sent, delivered or rejected. This log is kept for {{ $verifyAttemptDays }} days so the shop can troubleshoot delivery problems and detect abuse.</li>
     <li>Your IP address is recorded to prevent abuse and is deleted after {{ $ipDays }} days.</li>
     <li>Roll records are kept for {{ $retentionYears }} years to meet record-keeping obligations for promotional competitions, then deleted.</li>
     <li>To ask about or delete your information, contact {{ $settings->promoter_email }}.</li>

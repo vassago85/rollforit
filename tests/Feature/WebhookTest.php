@@ -174,3 +174,71 @@ it('re-locks a roll when the order is cancelled', function () {
     expect($roll->fulfilled_at)->toBeNull()
         ->and($roll->fulfilled_order_id)->toBeNull();
 });
+
+it('marks a winning roll as redeemed when the order used its code', function () {
+    $shop = makeShop();
+    $roll = Roll::create([
+        'shop_id' => $shop->id,
+        'email_hash' => EmailHasher::hash('winner@example.com'),
+        'promo_date' => now()->toDateString(),
+        'cart_subtotal' => 80000, 'eligible_subtotal' => 80000,
+        'picked_number' => 1, 'displayed_number' => 1,
+        'won' => true, 'payout' => 50000, 'discount_code' => 'ROLL-WON11111',
+        'code_status' => Roll::CODE_CREATED,
+    ]);
+
+    webhook($shop, 'orders/paid', [
+        'shop_domain' => $shop->domain,
+        'admin_graphql_api_id' => 'gid://shopify/Order/9000',
+        'customer' => ['id' => 1, 'email' => 'winner@example.com'],
+        'email' => 'winner@example.com',
+        'browser_ip' => '203.0.113.1',
+        'created_at' => '2026-10-16T11:30:00Z',
+        'test' => false,
+        'discount_codes' => [
+            ['code' => 'ROLL-WON11111', 'amount' => '500.00', 'type' => 'fixed_amount'],
+        ],
+        'total_discounts' => '500.00',
+    ])->assertOk();
+
+    $fresh = $roll->refresh();
+    expect($fresh->redeemed_at)->not->toBeNull()
+        ->and($fresh->redeemed_order_id)->toBe('gid://shopify/Order/9000')
+        ->and($fresh->redeemed_amount)->toBe(50000);
+});
+
+it('leaves other winning rolls untouched when the order used a different code', function () {
+    $shop = makeShop();
+    $redeemedRoll = Roll::create([
+        'shop_id' => $shop->id,
+        'email_hash' => EmailHasher::hash('a@example.com'),
+        'promo_date' => now()->toDateString(),
+        'cart_subtotal' => 80000, 'eligible_subtotal' => 80000,
+        'picked_number' => 1, 'displayed_number' => 1,
+        'won' => true, 'payout' => 50000, 'discount_code' => 'ROLL-AAAA1111',
+        'code_status' => Roll::CODE_CREATED,
+    ]);
+    $untouchedRoll = Roll::create([
+        'shop_id' => $shop->id,
+        'email_hash' => EmailHasher::hash('b@example.com'),
+        'promo_date' => now()->toDateString(),
+        'cart_subtotal' => 80000, 'eligible_subtotal' => 80000,
+        'picked_number' => 1, 'displayed_number' => 1,
+        'won' => true, 'payout' => 50000, 'discount_code' => 'ROLL-BBBB2222',
+        'code_status' => Roll::CODE_CREATED,
+    ]);
+
+    webhook($shop, 'orders/paid', [
+        'shop_domain' => $shop->domain,
+        'admin_graphql_api_id' => 'gid://shopify/Order/9001',
+        'email' => 'a@example.com',
+        'browser_ip' => '203.0.113.2',
+        'created_at' => '2026-10-16T11:30:00Z',
+        'test' => false,
+        'discount_codes' => [['code' => 'ROLL-AAAA1111', 'amount' => '500.00', 'type' => 'fixed_amount']],
+        'total_discounts' => '500.00',
+    ])->assertOk();
+
+    expect($redeemedRoll->refresh()->redeemed_at)->not->toBeNull()
+        ->and($untouchedRoll->refresh()->redeemed_at)->toBeNull();
+});

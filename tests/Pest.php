@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Block;
+use App\Models\Roll;
 use App\Models\Shop;
 use App\Models\ShopSettings;
 use App\Promotion\IdentityHasher;
@@ -9,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class)
@@ -212,4 +215,67 @@ function rollPayload(array $overrides = []): array
         'lines' => [['variant_id' => 1, 'quantity' => 1]],
         'currency' => 'ZAR',
     ], $overrides);
+}
+
+/**
+ * Admin API request helper. Attaches a valid App Bridge ID token so the
+ * `shopify.session` middleware accepts the call. Hoisted here (rather than
+ * living in AdminTest.php) so ParaTest workers that pick up SimulatorTest or
+ * AppProxyTest can still call it — a sibling-file function definition is NOT
+ * loaded by a worker that only runs one of its callers.
+ */
+function admin(Shop $shop): TestCase
+{
+    return test()->withHeaders(['Authorization' => 'Bearer '.idToken($shop), 'Accept' => 'application/json']);
+}
+
+/**
+ * Fires a storefront roll request through the signed app proxy. Hoisted from
+ * RollTest.php so PosRollTest and OwedRollTest workers find it too.
+ *
+ * @param  array<string, mixed>  $payload
+ * @param  array<string, string>  $headers
+ */
+function roll(Shop $shop, array $payload = [], array $headers = []): TestResponse
+{
+    return test()->withHeaders($headers + ['Accept' => 'application/json'])
+        ->postJson('/api/proxy/roll?'.proxyQuery($shop, ['nonce' => bin2hex(random_bytes(4))]), rollPayload($payload));
+}
+
+/**
+ * Seed the block log so the next roll on this shop lands on a win. Hoisted
+ * from RollTest.php for the same cross-file ParaTest reason as roll().
+ */
+function forceNextWin(Shop $shop): Block
+{
+    return Block::create(['shop_id' => $shop->id, 'size' => 10, 'winning_position' => 1, 'next_position' => 1]);
+}
+
+/**
+ * Seed the block log so the next roll on this shop lands on a loss.
+ */
+function forceNextLoss(Shop $shop): Block
+{
+    return Block::create(['shop_id' => $shop->id, 'size' => 10, 'winning_position' => 10, 'next_position' => 1]);
+}
+
+/**
+ * Create a settled winning roll today so social-proof and cap-exhaustion
+ * tests don't have to walk the full roll flow.
+ */
+function winnerToday(Shop $shop, int $payout): Roll
+{
+    return Roll::create([
+        'shop_id' => $shop->id,
+        'email_hash' => bin2hex(random_bytes(32)),
+        'promo_date' => now('Africa/Johannesburg')->toDateString(),
+        'cart_subtotal' => $payout,
+        'eligible_subtotal' => $payout,
+        'picked_number' => 1,
+        'displayed_number' => 1,
+        'won' => true,
+        'payout' => $payout,
+        'discount_code' => 'ROLL-OLD'.random_int(100, 999),
+        'code_status' => Roll::CODE_CREATED,
+    ]);
 }

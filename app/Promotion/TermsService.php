@@ -8,6 +8,7 @@ use App\Models\TermsVersion;
 use App\Shopify\Exceptions\ShopifyApiException;
 use App\Shopify\ShopifyAdmin;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
 
@@ -97,6 +98,7 @@ class TermsService
             ))),
             'ipDays' => (int) config('shopify.retention.ip_days'),
             'retentionYears' => (int) config('shopify.retention.roll_years'),
+            'verifyAttemptDays' => (int) config('shopify.retention.verify_attempt_days'),
             'nextVersion' => $this->latestVersion($shop) + 1,
             'date' => now($shop->timezone)->toFormattedDateString(),
         ])->render();
@@ -315,7 +317,7 @@ class TermsService
                 continue;
             }
             try {
-                $parsed[] = \Carbon\CarbonImmutable::parse($raw, $timezone)->startOfDay();
+                $parsed[] = CarbonImmutable::parse($raw, $timezone)->startOfDay();
             } catch (\Throwable) {
                 // Bad data in the JSON column: skip silently rather than blowing up terms rendering.
             }

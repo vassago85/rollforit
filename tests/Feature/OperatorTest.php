@@ -2,6 +2,7 @@
 
 use App\Models\Roll;
 use App\Models\Shop;
+use App\Models\ShopSettings;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -100,6 +101,51 @@ it('logs operators in and renders the dashboard with cross-shop totals', functio
         ->assertSee('Overview')
         ->assertSee('Installed shops')
         ->assertSee('R500'); // Formatted R50_000 cents payout
+});
+
+it('shows the weekly promo days on the shop detail view when the shop runs on a weekly schedule', function () {
+    // Weekly is the default, but assert the labels explicitly so the operator view
+    // never regresses to showing "Promo dates" for a shop that is using days-of-week.
+    $operator = operator();
+    $shop = installedShop();
+    $shop->settingsOrCreate()->forceFill([
+        'schedule_mode' => ShopSettings::SCHEDULE_WEEKLY,
+        'promo_days' => [1, 3, 5],
+        'promo_dates' => [],
+    ])->save();
+
+    $this->actingAs($operator)
+        ->get("/op/shops/{$shop->id}")
+        ->assertOk()
+        ->assertSee('Schedule mode')
+        ->assertSee('Weekly')
+        ->assertSee('Promo days')
+        ->assertSee('1, 3, 5')
+        ->assertDontSee('Promo dates');
+});
+
+it('shows a human calendar list on the shop detail view when the shop runs on specific dates', function () {
+    $operator = operator();
+    $shop = installedShop();
+    $shop->settingsOrCreate()->forceFill([
+        'schedule_mode' => ShopSettings::SCHEDULE_DATES,
+        'promo_dates' => ['2026-11-30', '2026-12-24'],
+        // The weekly list is deliberately present but should be ignored once the
+        // schedule mode is 'dates' — the view must branch on schedule_mode, not
+        // on whether promo_days happens to be non-empty.
+        'promo_days' => [1, 2, 3, 4, 5, 6, 7],
+    ])->save();
+
+    $this->actingAs($operator)
+        ->get("/op/shops/{$shop->id}")
+        ->assertOk()
+        ->assertSee('Specific dates')
+        ->assertSee('Promo dates')
+        ->assertSee('30 November 2026')
+        ->assertSee('24 December 2026')
+        // The weekly list of day numbers must not appear in dates mode, or the
+        // operator will think the shop is running every day too.
+        ->assertDontSee('1, 2, 3, 4, 5, 6, 7');
 });
 
 it('redacts the cleartext POS secret on the shop detail view', function () {

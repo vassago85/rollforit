@@ -47,12 +47,12 @@
           </select>
 
           <label for="mail_from_address">From address</label>
-          <input type="email" name="mail_from_address" id="mail_from_address"
+          <input type="email" name="mail_from_address" id="mail_from_address" autocomplete="off"
             value="{{ in_array('mail.from.address', $summary['overridden_in_db'], true) ? $summary['from_address'] : '' }}"
             placeholder="{{ $env_fallbacks['mail.from.address'] ?: 'noreply@yourdomain.com' }}" />
 
           <label for="mail_from_name">From display name</label>
-          <input type="text" name="mail_from_name" id="mail_from_name"
+          <input type="text" name="mail_from_name" id="mail_from_name" autocomplete="off"
             value="{{ in_array('mail.from.name', $summary['overridden_in_db'], true) ? $summary['from_name'] : '' }}"
             placeholder="{{ $env_fallbacks['mail.from.name'] ?: 'Roll4It' }}" />
           <p class="label" style="margin-top:-10px;margin-bottom:16px;">
@@ -62,12 +62,12 @@
 
         <div>
           <label for="mailgun_domain">Mailgun domain</label>
-          <input type="text" name="mailgun_domain" id="mailgun_domain"
+          <input type="text" name="mailgun_domain" id="mailgun_domain" autocomplete="off"
             value="{{ in_array('mail.mailgun.domain', $summary['overridden_in_db'], true) ? $summary['mailgun_domain'] : '' }}"
             placeholder="{{ $env_fallbacks['mail.mailgun.domain'] ?: 'mg.yourdomain.com' }}" />
 
           <label for="mailgun_endpoint">Mailgun endpoint</label>
-          <input type="text" name="mailgun_endpoint" id="mailgun_endpoint"
+          <input type="text" name="mailgun_endpoint" id="mailgun_endpoint" autocomplete="off"
             value="{{ in_array('mail.mailgun.endpoint', $summary['overridden_in_db'], true) ? $summary['mailgun_endpoint'] : '' }}"
             placeholder="{{ $env_fallbacks['mail.mailgun.endpoint'] ?: 'api.mailgun.net' }}" />
           <p class="label" style="margin-top:-10px;margin-bottom:16px;">
@@ -103,7 +103,7 @@
       @csrf
       <div style="flex:1;">
         <label for="to">Send to</label>
-        <input type="email" name="to" id="to" required placeholder="you@example.com" style="margin:0;" />
+        <input type="email" name="to" id="to" required autocomplete="email" placeholder="you@example.com" style="margin:0;" />
       </div>
       <button class="btn" type="submit" style="width:auto;white-space:nowrap;">Send test</button>
     </form>

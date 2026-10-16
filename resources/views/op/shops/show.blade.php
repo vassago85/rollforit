@@ -64,7 +64,20 @@
         <dt>Max payout</dt><dd>{{ $settings->max_payout ? \App\Support\Money::format($settings->max_payout, $symbol) : '—' }}</dd>
         <dt>Daily budget</dt><dd>{{ $settings->daily_budget ? \App\Support\Money::format($settings->daily_budget, $symbol) : '—' }}</dd>
         <dt>Winners/day</dt><dd>{{ $settings->max_winners_per_day ?: '—' }}</dd>
-        <dt>Promo days</dt><dd>{{ ! empty($settings->promo_days) ? implode(', ', $settings->promo_days) : '—' }}</dd>
+        <dt>Schedule mode</dt><dd>{{ $settings->isDatesSchedule() ? 'Specific dates' : 'Weekly' }}</dd>
+        @if ($settings->isDatesSchedule())
+          <dt>Promo dates</dt>
+          <dd>
+            @php
+              // Mirrors \App\Promotion\TermsService::formatPromoDates so the operator view
+              // and the public terms page use the same human format ("30 November 2026").
+              $dates = \App\Promotion\TermsService::formatPromoDates($settings->promo_dates ?? [], $shop->timezone);
+            @endphp
+            {{ ! empty($dates) ? implode(', ', $dates) : '— (no dates listed)' }}
+          </dd>
+        @else
+          <dt>Promo days</dt><dd>{{ ! empty($settings->promo_days) ? implode(', ', $settings->promo_days) : '—' }}</dd>
+        @endif
         <dt>Window</dt><dd>{{ $settings->start_time && $settings->end_time ? $settings->start_time . ' – ' . $settings->end_time : '—' }}</dd>
       </dl>
     </section>

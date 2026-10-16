@@ -27,6 +27,7 @@ class PromoMetricsService
               email
               test
               cancelledAt
+              createdAt
               discountCodes
               currentTotalPriceSet { shopMoney { amount } }
               currentSubtotalPriceSet { shopMoney { amount } }
@@ -36,7 +37,10 @@ class PromoMetricsService
         }
         GQL;
 
-    public function __construct(private readonly ShopifyAdmin $admin) {}
+    public function __construct(
+        private readonly ShopifyAdmin $admin,
+        private readonly RedemptionTracker $redemption,
+    ) {}
 
     /**
      * From the window start to the end of the promo day. Individual codes only
@@ -113,6 +117,21 @@ class PromoMetricsService
 
                     break;
                 }
+            }
+
+            // Backfill per-roll redemption from the Shopify data as a safety net
+            // for anything the orders/paid webhook missed (uninstall windows,
+            // pre-shipping rolls, retried deliveries). The tracker is idempotent
+            // so already-marked rolls are left alone.
+            if (! empty($order['discountCodes'] ?? [])) {
+                $placedAt = CarbonImmutable::parse((string) ($order['createdAt'] ?? $start->toIso8601String()));
+                $this->redemption->markOrderRedemption(
+                    $shop,
+                    (string) ($order['id'] ?? ''),
+                    (array) $order['discountCodes'],
+                    $discounts,
+                    $placedAt,
+                );
             }
         }
 

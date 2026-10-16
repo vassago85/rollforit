@@ -7,8 +7,11 @@ use App\Models\Roll;
 use App\Models\Shop;
 use App\Promotion\EmailHasher;
 use App\Promotion\IdentityHasher;
+use App\Promotion\RedemptionTracker;
 use App\Promotion\RollFulfillment;
+use App\Support\Money;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +19,10 @@ use Illuminate\Support\Facades\Log;
 
 class WebhookController extends Controller
 {
-    public function __construct(private readonly RollFulfillment $fulfillment) {}
+    public function __construct(
+        private readonly RollFulfillment $fulfillment,
+        private readonly RedemptionTracker $redemption,
+    ) {}
 
     public function handle(Request $request): Response
     {
@@ -67,11 +73,43 @@ class WebhookController extends Controller
 
         $roll = $this->fulfillment->markOrderPaid($shop, $orderId, $emailHash, $customerHash, $ip, $placedAt);
 
+        // Independently check if this order used a Roll4It discount code, so a
+        // merchant's "Rolls today" view flips the winning row from "Not redeemed
+        // yet" to "Redeemed R500" within seconds of the shopper checking out.
+        // This is separate from fulfillment: the roller can have been unblocked
+        // by any paid order, while redemption only fires when THIS order's cart
+        // actually contained the winning code.
+        $codes = $this->discountCodesFrom($request);
+        $discountCents = Money::toCents((string) ($request->input('total_discounts') ?? '0')) ?? 0;
+        $redeemed = $this->redemption->markOrderRedemption($shop, $orderId, $codes, $discountCents, $placedAt);
+
         Log::info('Roll4It orders/paid processed', [
             'shop' => $shop->domain,
             'order' => $orderId,
             'matched_roll' => $roll?->id,
+            'redeemed_roll' => $redeemed?->id,
         ]);
+    }
+
+    /**
+     * Shopify sends discount_codes as `[{code: "FOO", amount: "...", type: "..."}, ...]`
+     * on orders/* webhooks. Flatten to a plain list of code strings for the tracker.
+     *
+     * @return list<string>
+     */
+    private function discountCodesFrom(Request $request): array
+    {
+        $raw = (array) $request->input('discount_codes', []);
+        $out = [];
+        foreach ($raw as $entry) {
+            if (is_string($entry)) {
+                $out[] = $entry;
+            } elseif (is_array($entry) && isset($entry['code'])) {
+                $out[] = (string) $entry['code'];
+            }
+        }
+
+        return $out;
     }
 
     private function orderCancelled(Shop $shop, Request $request): void
@@ -139,7 +177,7 @@ class WebhookController extends Controller
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Builder<Roll>
+     * @return Builder<Roll>
      */
     private function rollsForCustomer(Shop $shop, Request $request)
     {

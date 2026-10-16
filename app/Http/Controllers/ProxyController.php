@@ -200,10 +200,11 @@ class ProxyController extends Controller
         ]);
 
         $shop = $this->shop($request);
+        $ip = $request->attributes->get('customer_ip');
         $window = new PromoWindow($shop->settingsOrCreate(), $shop->timezone);
 
         try {
-            $verification->verifyCode($shop, $data['email'], $data['code'], $window->promoDate());
+            $verification->verifyCode($shop, $data['email'], $data['code'], $window->promoDate(), $ip);
         } catch (VerificationRejected $e) {
             return $this->noStore(['error' => $e->reason, 'message' => $e->getMessage()], $e->status);
         }

@@ -49,7 +49,7 @@
 
   function loadFrame(state) {
     const q = new URLSearchParams({ state, subtotal: String(subtotal()), outcome });
-    frames[state].src = 'widget.html?' + q.toString();
+    frames[state].src = '/demo/widget.html?' + q.toString();
   }
 
   document.querySelectorAll('[data-outcome]').forEach((b) => b.addEventListener('click', () => {

@@ -41,6 +41,8 @@ class Roll extends Model
             'is_test' => 'boolean',
             'position' => 'integer',
             'fulfilled_at' => 'datetime',
+            'redeemed_at' => 'datetime',
+            'redeemed_amount' => 'integer',
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Promotion;
 
 use App\Mail\StorefrontVerifyCode;
+use App\Models\EmailVerifyAttempt;
 use App\Models\Shop;
 use App\Promotion\Exceptions\VerificationRejected;
 use Carbon\CarbonImmutable;
@@ -55,6 +56,7 @@ class EmailVerification
 
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->log->info('EmailVerification.sendCode rejected: invalid_email', $context);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_SEND, 'invalid_email');
             throw new VerificationRejected('invalid_email', 'That email does not look right. Please check and try again.');
         }
 
@@ -64,10 +66,12 @@ class EmailVerification
 
         if ($ip && RateLimiter::tooManyAttempts($burstKey, self::DAILY_SENDS_PER_IP)) {
             $this->log->info('EmailVerification.sendCode rejected: rate_limited (ip)', $context);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_SEND, 'rate_limited_ip');
             throw new VerificationRejected('rate_limited', 'Too many confirmation codes from this connection. Please try again later.', 429);
         }
         if (RateLimiter::tooManyAttempts($emailKey, self::DAILY_SENDS_PER_EMAIL)) {
             $this->log->info('EmailVerification.sendCode rejected: rate_limited (email)', $context);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_SEND, 'rate_limited_email');
             throw new VerificationRejected('rate_limited', 'Too many confirmation codes for this email. Please try again later.', 429);
         }
 
@@ -75,6 +79,7 @@ class EmailVerification
         $remaining = $this->cooldownSeconds($cooldownKey);
         if ($remaining > 0) {
             $this->log->info('EmailVerification.sendCode rejected: cooldown', $context + ['cooldown_seconds' => $remaining]);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_SEND, 'cooldown');
             throw new VerificationRejected('cooldown', "Please wait {$remaining} seconds before requesting another code.", 429);
         }
 
@@ -100,11 +105,13 @@ class EmailVerification
             // Mail transport problems should surface to the shopper (they can't verify
             // without the code) rather than being swallowed like merchant notifications.
             $this->log->warning('EmailVerification.sendCode mail transport failed', $context + ['error' => $e->getMessage()]);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_SEND, 'mail_failed');
             throw new VerificationRejected('mail_failed', 'We could not send a confirmation code just now. Please try again.', 502);
         }
 
         // Code value itself is never logged — that's a shared secret with the shopper.
         $this->log->info('EmailVerification.sendCode queued', $context + ['expires_at' => $expiresAt->toIso8601String()]);
+        $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_SEND, 'queued');
 
         return [
             'expires_at' => $expiresAt->toIso8601String(),
@@ -118,13 +125,14 @@ class EmailVerification
      *
      * @throws VerificationRejected
      */
-    public function verifyCode(Shop $shop, string $email, string $code, string $promoDate): void
+    public function verifyCode(Shop $shop, string $email, string $code, string $promoDate, ?string $ip = null): void
     {
         $email = IdentityHasher::normaliseEmail($email);
         $context = ['shop_id' => $shop->id, 'email' => $email, 'promo_date' => $promoDate];
 
         if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->log->info('EmailVerification.verifyCode rejected: invalid_email', $context);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_VERIFY, 'invalid_email');
             throw new VerificationRejected('invalid_email', 'That email does not look right. Please check and try again.');
         }
 
@@ -134,6 +142,7 @@ class EmailVerification
 
         if (! is_array($entry)) {
             $this->log->info('EmailVerification.verifyCode rejected: code_expired', $context);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_VERIFY, 'code_expired');
             throw new VerificationRejected('code_expired', 'That confirmation code has expired. Please request a new one.');
         }
 
@@ -141,6 +150,7 @@ class EmailVerification
         if ($attempts >= self::MAX_ATTEMPTS) {
             $this->cache->forget($codeKey);
             $this->log->info('EmailVerification.verifyCode rejected: too_many_attempts', $context + ['attempts' => $attempts]);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_VERIFY, 'too_many_attempts', $attempts);
             throw new VerificationRejected('too_many_attempts', 'Too many wrong codes. Please request a new one.');
         }
 
@@ -149,6 +159,7 @@ class EmailVerification
             $entry['attempts'] = $attempts + 1;
             $this->cache->put($codeKey, $entry, self::CODE_TTL_MINUTES * 60);
             $this->log->info('EmailVerification.verifyCode rejected: wrong_code', $context + ['attempt' => $entry['attempts']]);
+            $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_VERIFY, 'wrong_code', $entry['attempts']);
             throw new VerificationRejected('wrong_code', 'That code is not right. Please check your inbox and try again.');
         }
 
@@ -160,6 +171,34 @@ class EmailVerification
         );
 
         $this->log->info('EmailVerification.verifyCode confirmed', $context);
+        $this->recordAttempt($shop, $email, $ip, EmailVerifyAttempt::ACTION_VERIFY, 'confirmed');
+    }
+
+    /**
+     * Append an attempt row for the reporting UI. We never want this to break
+     * the shopper's verify flow, so a DB hiccup is logged and swallowed —
+     * the Mailgun send already happened, so the shopper still gets their code.
+     */
+    private function recordAttempt(Shop $shop, ?string $email, ?string $ip, string $action, string $outcome, ?int $attemptNumber = null): void
+    {
+        try {
+            EmailVerifyAttempt::create([
+                'shop_id' => $shop->id,
+                'email' => $email !== '' ? $email : null,
+                'ip' => $ip,
+                'action' => $action,
+                'outcome' => $outcome,
+                'attempt_number' => $attemptNumber,
+            ]);
+        } catch (Throwable $e) {
+            $this->log->warning('EmailVerification could not persist attempt row', [
+                'shop_id' => $shop->id,
+                'email' => $email,
+                'action' => $action,
+                'outcome' => $outcome,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
