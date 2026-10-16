@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Roll4It test table</title>
-  <link rel="stylesheet" href="/demo/assets/rfi-widget.css">
+  <link rel="stylesheet" href="/demo/assets/rfi-widget.css?v={{ $assetsVersion }}">
   <style>
     html, body { margin: 0; background: transparent; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 15px; }
     body { padding: 4px 2px 8px; }
@@ -13,8 +13,8 @@
   </style>
 </head>
 <body>
-  <div class="rfi-root" data-rfi data-placement="lab" data-proxy="/apps/roll-for-it" data-die3d="/demo/assets/rfi-die3d.js" hidden></div>
-  <script src="/admin/lab-frame.js"></script>
-  <script src="/demo/assets/rfi-widget.js"></script>
+  <div class="rfi-root" data-rfi data-placement="lab" data-proxy="/apps/roll-for-it" data-die3d="/demo/assets/rfi-die3d.js?v={{ $assetsVersion }}" hidden></div>
+  <script src="/admin/lab-frame.js?v={{ $assetsVersion }}"></script>
+  <script src="/demo/assets/rfi-widget.js?v={{ $assetsVersion }}"></script>
 </body>
 </html>

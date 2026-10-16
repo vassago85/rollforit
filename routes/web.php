@@ -22,6 +22,18 @@ Route::middleware('shopify.embedded')->name('admin.')->group(function () {
     Route::view('/simulator', 'admin.simulator')->name('simulator');
 });
 
+// Test-lab iframe shell. Served dynamically so the widget bundle URLs always
+// carry the current file mtime as a cache-buster, otherwise Shopify Admin's
+// embedded webview will keep showing the previous version of the widget JS/CSS.
+Route::get('/admin/lab-frame.html', function () {
+    $widget = public_path('demo/assets/rfi-widget.js');
+    $version = is_file($widget) ? (string) filemtime($widget) : (string) time();
+
+    return response()
+        ->view('admin.lab-frame', ['assetsVersion' => $version])
+        ->header('Cache-Control', 'no-store, private');
+})->name('admin.lab-frame');
+
 Route::prefix('op')->name('op.')->group(function () {
     Route::middleware('guest:web')->group(function () {
         Route::get('/login', [OperatorAuthController::class, 'showLogin'])->name('login');
