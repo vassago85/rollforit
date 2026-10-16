@@ -126,6 +126,17 @@
         </s-stack>
     </s-section>
 
+    <s-section heading="Email verification">
+        <s-stack gap="base">
+            <s-paragraph>Guest shoppers must confirm a 6-digit code before they can roll. The code lands in their inbox from Roll4It's email sender, shown as <s-text id="mail-display-name" font-weight="bold"></s-text>. Replies route to your shop so the shopper reaches you, not us. Signed-in Shopify customers skip the code challenge entirely.</s-paragraph>
+            <s-stack direction="inline" gap="base" alignItems="center">
+                <s-badge id="mail-badge" tone="neutral">Checking…</s-badge>
+                <s-text id="mail-reply-summary" color="subdued"></s-text>
+            </s-stack>
+            <s-paragraph color="subdued" id="mail-fine"></s-paragraph>
+        </s-stack>
+    </s-section>
+
     <s-section heading="Point of sale (in-store)">
         <s-stack gap="base">
             <s-paragraph>Let staff offer a roll on the till. HuntexPos verifies the roll with Roll4It before any money changes hands; winnings come off the invoice directly.</s-paragraph>
@@ -201,6 +212,7 @@
     renderCollections();
 
     renderPos(data);
+    renderMail(data);
 
     el('timezone-note').textContent = 'Times are in your store timezone: ' + data.shop.timezone + '.';
     el('enabled').disabled = !data.status.can_enable && !f.enabled;
@@ -231,6 +243,18 @@
     el('pos-rotate').textContent = configured ? 'Rotate POS secret' : 'Generate POS secret';
     el('pos-disable').hidden = !configured;
     el('pos_enabled').disabled = !configured;
+  }
+
+  function renderMail(data) {
+    const m = data.mail || {};
+    const live = !!m.verification_live;
+    el('mail-badge').textContent = live ? 'Live' : 'Not configured';
+    el('mail-badge').tone = live ? 'success' : 'warning';
+    el('mail-display-name').textContent = m.display_name || '';
+    el('mail-reply-summary').textContent = m.reply_summary || '';
+    el('mail-fine').textContent = live
+      ? 'Mailgun is managed by Roll4It. If you need to change the sender or reply address, update your Shopify shop email.'
+      : 'Mailgun has not been enabled by Roll4It yet. Until then guest shoppers cannot roll — only signed-in Shopify customers can. Contact Roll4It support to turn this on.';
   }
 
   function renderCollections() {

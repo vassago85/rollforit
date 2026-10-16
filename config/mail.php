@@ -61,6 +61,13 @@ return [
             // ],
         ],
 
+        'mailgun' => [
+            'transport' => 'mailgun',
+            // Credentials and endpoint are resolved from config/services.php
+            // (which is overlaid at runtime by App\Support\MailConfigurator from
+            // the operator-managed app_settings table).
+        ],
+
         'resend' => [
             'transport' => 'resend',
         ],

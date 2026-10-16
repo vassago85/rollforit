@@ -218,8 +218,17 @@
   const cartCents = () => moneyToCents(el('lab-cart').value) || 0;
 
   function frameConfig() {
+    // The caps block above reads dice_count/pick_range straight from state.settings.
+    // Overlay the same values onto the widget status so the two displays can never
+    // disagree — if a stale `widget.status.dice_count` ever slips in (e.g. an older
+    // cached simulator payload), the merchant still sees the widget match the caps.
+    const s = state.settings;
     return {
-      status: Object.assign({}, state.widget.status, { logged_in: el('lab-customer').value === 'signed_in' }),
+      status: Object.assign({}, state.widget.status, {
+        logged_in: el('lab-customer').value === 'signed_in',
+        dice_count: s.dice_count,
+        pick_range: s.pick_range,
+      }),
       cart: cartCents(),
       streak: parseInt(el('lab-streak').value, 10) || 1,
       email: 'customer@example.com',
@@ -227,8 +236,13 @@
     };
   }
 
-  function deal() {
-    if (rolling || !state || !state.widget) return;
+  async function deal() {
+    if (rolling) return;
+    // Pull fresh settings on every deal so the merchant can tweak Dice / Odds in
+    // another browser tab and immediately see the Test lab reflect it, without
+    // having to hard-reload the embedded admin.
+    try { state = await api('GET', 'simulator'); setCaps(); } catch (e) { /* keep last state */ }
+    if (!state || !state.widget) return;
     landing = null;
     setTable(null, pickCopy());
     send({ type: 'config', config: frameConfig() });

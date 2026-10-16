@@ -202,6 +202,37 @@ class SettingsService
                 'win_message' => WidgetCopy::DEFAULT_WIN,
                 'lose_message' => WidgetCopy::DEFAULT_LOSE,
             ],
+            'mail' => self::mailSummary($shop),
+        ];
+    }
+
+    /**
+     * Read-only mail summary for the merchant admin. Mailgun credentials are an
+     * operator-wide setting (configured by Roll4It, not by each shop), so the
+     * merchant can see whether it's live for their store but not change anything.
+     *
+     * @return array<string, mixed>
+     */
+    private static function mailSummary(Shop $shop): array
+    {
+        $mailer = (string) config('mail.default', 'log');
+        $hasMailgun = $mailer === 'mailgun'
+            && (string) config('services.mailgun.domain') !== ''
+            && (string) config('services.mailgun.secret') !== '';
+        $fromAddress = (string) config('mail.from.address', '');
+        $shopEmail = (string) ($shop->email ?: '');
+
+        return [
+            'verification_live' => $hasMailgun,
+            'mailer' => $mailer,
+            'from_address' => $fromAddress,
+            'shop_email' => $shopEmail,
+            'display_name' => $shop->name ?: (string) config('mail.from.name'),
+            // Sent-on-behalf-of pattern: the mail leaves from Roll4It's authenticated
+            // address but shows the shop's name and routes replies back to the shop.
+            'reply_summary' => $shopEmail !== ''
+                ? sprintf('Replies go to %s.', $shopEmail)
+                : 'Set a shop contact email in Shopify to route reply-to.',
         ];
     }
 

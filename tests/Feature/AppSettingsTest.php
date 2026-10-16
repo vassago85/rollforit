@@ -225,3 +225,26 @@ it('refuses to send a test email to an invalid address', function () {
 
     Mail::assertNothingQueued();
 });
+
+/* -----------------------------------------------------------------------
+ * Composer / transport wiring
+ *
+ * Regression guard: Laravel's MailManager will throw "Mailer [mailgun] is not
+ * defined" if either (a) config/mail.php has no `mailgun` entry under
+ * `mailers`, or (b) symfony/mailgun-mailer + symfony/http-client are not in
+ * composer.json. We've been bitten by both; this test keeps the wiring honest.
+ * ----------------------------------------------------------------------- */
+
+it('resolves the Mailgun mailer out of the manager without missing-driver errors', function () {
+    AppSetting::put('mail.mailgun.domain', 'mg.example.test');
+    AppSetting::put('mail.mailgun.secret', 'TEST_FIXTURE_abcdef0123456789', encrypted: true);
+    app(MailConfigurator::class)->apply();
+
+    // Resolving the mailer out of the manager is what blew up in prod — if the
+    // Symfony Mailgun transport isn't registered, this call throws
+    // InvalidArgumentException("Mailer [mailgun] is not defined.") before any
+    // actual send is attempted.
+    $mailer = app('mail.manager')->mailer('mailgun');
+
+    expect($mailer)->not->toBeNull();
+});
