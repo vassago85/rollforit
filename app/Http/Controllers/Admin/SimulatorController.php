@@ -44,6 +44,12 @@ class SimulatorController extends Controller
                 'max_payout_percent' => $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
                 'odds_n' => (int) $settings->odds_n,
                 'odds_mode' => $settings->odds_mode,
+                'dice_count' => (int) $settings->dice_count,
+                'pick_range' => (function () use ($settings) {
+                    [$min, $max] = $settings->pickRange();
+
+                    return ['min' => $min, 'max' => $max];
+                })(),
             ],
             'warnings' => SettingsService::warnings($settings, Money::symbolFor($shop->currency)),
             'blockers' => $settings->enableBlockers(),
@@ -90,7 +96,9 @@ class SimulatorController extends Controller
         $data = $request->validate([
             'cart_value' => ['required', 'regex:/^\d{1,7}(\.\d{1,2})?$/', 'not_regex:/^0+(\.0+)?$/'],
             'outcome' => ['required', 'in:win,loss,random'],
-            'picked_number' => ['required', 'integer', 'between:1,10'],
+            // Accept the whole single/two-dice range; the simulator clamps to the
+            // shop's actual pickRange() before rolling.
+            'picked_number' => ['required', 'integer', 'between:1,12'],
             'channel' => ['required', 'in:'.Roll::CHANNEL_ONLINE.','.Roll::CHANNEL_POS],
         ]);
 

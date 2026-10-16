@@ -105,6 +105,7 @@
                             <dt>Max payout</dt><dd id="lab-cap-max">-</dd>
                             <dt>Max % of cart</dt><dd id="lab-cap-pct">-</dd>
                             <dt>Odds</dt><dd id="lab-cap-odds">-</dd>
+                            <dt>Dice</dt><dd id="lab-cap-dice">-</dd>
                         </dl>
                     </s-stack>
                 </s-box>
@@ -164,9 +165,18 @@
     el('lab-cap-max').textContent = s.max_payout ? centsToMoney(s.max_payout, sym) : 'not set';
     el('lab-cap-pct').textContent = s.max_payout_percent ? (s.max_payout_percent + '%') : 'no percentage cap';
     el('lab-cap-odds').textContent = (s.odds_mode === 'guaranteed' ? '1 in every ' : '1 in ') + s.odds_n + (s.odds_mode === 'guaranteed' ? ' entries' : ' chance');
+    el('lab-cap-dice').textContent = s.dice_count === 2
+      ? '2 dice (pick ' + s.pick_range.min + '–' + s.pick_range.max + ')'
+      : '1 die (pick ' + s.pick_range.min + '–' + s.pick_range.max + ')';
     if (s.min_order && !el('lab-cart').value) {
       el('lab-cart').value = String(Math.round(s.min_order * 1.2) / 100);
     }
+  }
+
+  function pickCopy() {
+    const s = state && state.settings;
+    if (s && s.dice_count === 2) return 'Pick a sum · Roll the dice';
+    return 'Pick a number · Roll the die';
   }
 
   function renderBlockers(list) {
@@ -220,7 +230,7 @@
   function deal() {
     if (rolling || !state || !state.widget) return;
     landing = null;
-    setTable(null, 'Pick a number · Roll the die');
+    setTable(null, pickCopy());
     send({ type: 'config', config: frameConfig() });
   }
 
@@ -241,7 +251,7 @@
     } catch (e) {
       rolling = false;
       el('lab-deal').disabled = false;
-      setTable(null, 'Pick a number · Roll the die');
+      setTable(null, pickCopy());
       reply = { status: e.status || 500, body: { message: e.message || 'Could not run the roll.' } };
     }
     send({ type: 'rolled', id: msg.id, status: reply.status, body: reply.body });

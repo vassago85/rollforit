@@ -151,3 +151,26 @@ it('leaves the table closed until the caps are set', function () {
 
     expect($response->json('widget'))->toBeNull();
 });
+
+it('reports the dice count and pick range so the lab caps card matches the storefront', function () {
+    $shop = makeShop(['dice_count' => 2, 'odds_n' => 12]);
+
+    $response = admin($shop)->getJson('/api/admin/simulator')->assertOk();
+
+    expect($response->json('settings.dice_count'))->toBe(2)
+        ->and($response->json('settings.pick_range'))->toBe(['min' => 2, 'max' => 12])
+        ->and($response->json('widget.status.dice_count'))->toBe(2)
+        ->and($response->json('widget.status.pick_range'))->toBe(['min' => 2, 'max' => 12]);
+});
+
+it('accepts a two-dice pick in the lab roll endpoint', function () {
+    $shop = makeShop(['dice_count' => 2, 'odds_n' => 12]);
+
+    $response = admin($shop)->postJson('/api/admin/simulator/roll', [
+        'cart_value' => '800', 'outcome' => 'win', 'picked_number' => 12, 'channel' => 'online',
+    ])->assertOk();
+
+    expect($response->json('result.won'))->toBeTrue()
+        ->and($response->json('result.picked_number'))->toBe(12)
+        ->and($response->json('result.displayed_number'))->toBe(12);
+});
