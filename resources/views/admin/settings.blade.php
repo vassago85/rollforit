@@ -70,6 +70,10 @@
                     <s-option value="chance">Random: every roll has a 1 in N chance</s-option>
                 </s-select>
                 <s-number-field id="odds_n" data-field="odds_n" label="N" min="2" max="1000" step="1"></s-number-field>
+                <s-select id="dice_count" data-field="dice_count" label="Dice" details="Picks 1-10 with one die, or 2-12 with two dice.">
+                    <s-option value="1">1 die (pick 1–10)</s-option>
+                    <s-option value="2">2 dice (pick 2–12)</s-option>
+                </s-select>
             </s-stack>
             <s-paragraph id="odds-statement"></s-paragraph>
         </s-stack>
@@ -169,7 +173,7 @@
 <script>
 (() => {
   const { api, toast, el, esc, copy, centsToMoney, moneyToCents, showErrors } = RFI;
-  const TEXT = ['start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent', 'daily_budget', 'max_winners_per_day', 'odds_n',
+  const TEXT = ['start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent', 'daily_budget', 'max_winners_per_day', 'odds_n', 'dice_count',
     'headline', 'win_message', 'lose_message', 'die_color', 'die_number_color', 'accent_color', 'roll_duration_ms',
     'drawer_selector', 'promoter_name', 'promoter_registration_number', 'promoter_address', 'promoter_email', 'promoter_phone'];
   const BOOLS = ['enabled', 'sound_enabled', 'celebration_enabled', 'show_countdown', 'pos_enabled'];
@@ -183,6 +187,7 @@
     TEXT.forEach((k) => { el(k).value = f[k] === null || f[k] === undefined ? '' : String(f[k]); });
     BOOLS.forEach((k) => { el(k).checked = !!f[k]; });
     el('odds_mode').value = f.odds_mode;
+    el('dice_count').value = String(f.dice_count || 1);
     el('promo_days').querySelectorAll('s-choice').forEach((c) => {
       c.selected = f.promo_days.includes(Number(c.getAttribute('value')));
     });

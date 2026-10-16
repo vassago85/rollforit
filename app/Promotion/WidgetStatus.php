@@ -40,9 +40,13 @@ final class WidgetStatus
             ];
         }
 
+        [$minPick, $maxPick] = $settings->pickRange();
+
         return [
             'open' => $reason === null,
             'reason' => $reason,
+            'dice_count' => (int) $settings->dice_count,
+            'pick_range' => ['min' => $minPick, 'max' => $maxPick],
             'next_roll' => $next ? [
                 'starts_at' => $next->toIso8601String(),
                 'starts_in' => max(0, $next->getTimestamp() - $window->now()->getTimestamp()),

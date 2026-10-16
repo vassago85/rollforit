@@ -27,14 +27,21 @@ class ShopSettings extends Model
         'excluded_collections' => '[]',
         'odds_mode' => self::MODE_GUARANTEED,
         'odds_n' => 10,
+        'dice_count' => 1,
         'terms_mode' => self::TERMS_GENERATED,
     ];
+
+    public function pickRange(): array
+    {
+        return (int) $this->dice_count === 2 ? [2, 12] : [1, 10];
+    }
 
     protected function casts(): array
     {
         return [
             'enabled' => 'boolean',
             'odds_n' => 'integer',
+            'dice_count' => 'integer',
             'promo_days' => 'array',
             'min_order' => 'integer',
             'max_payout' => 'integer',

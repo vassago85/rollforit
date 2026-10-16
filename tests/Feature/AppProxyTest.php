@@ -57,7 +57,7 @@ it('returns 404 for an unknown or uninstalled shop', function () {
 it('validates the roll body', function () {
     $shop = makeShop();
 
-    $this->postJson('/api/proxy/roll?'.proxyQuery($shop), rollPayload(['email' => 'not-an-email', 'picked_number' => 11]))
+    $this->postJson('/api/proxy/roll?'.proxyQuery($shop), rollPayload(['email' => 'not-an-email', 'picked_number' => 99]))
         ->assertStatus(422)
         ->assertJsonValidationErrors(['email', 'picked_number']);
 });

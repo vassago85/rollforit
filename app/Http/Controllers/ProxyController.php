@@ -87,9 +87,10 @@ class ProxyController extends Controller
     public function roll(Request $request, RollService $rolls): JsonResponse
     {
         $customerId = $request->attributes->get('logged_in_customer_id');
+        // Accept the widest range here; RollService re-validates against the shop's dice_count.
         $data = $request->validate([
             'email' => ['nullable', 'email:rfc', 'max:254'],
-            'picked_number' => ['required', 'integer', 'between:1,10'],
+            'picked_number' => ['required', 'integer', 'between:1,12'],
             'lines' => ['required', 'array', 'min:1', 'max:'.config('shopify.roll.max_cart_lines')],
             'lines.*.variant_id' => ['required'],
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:'.config('shopify.roll.max_line_quantity')],

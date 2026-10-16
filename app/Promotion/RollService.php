@@ -79,6 +79,11 @@ class RollService
             throw new RollRejected(RollRejected::CURRENCY, 'This promotion is only available in the store currency.');
         }
 
+        [$minPick, $maxPick] = $settings->pickRange();
+        if ($input->pickedNumber < $minPick || $input->pickedNumber > $maxPick) {
+            throw new RollRejected(RollRejected::CURRENCY, "Pick a number between {$minPick} and {$maxPick}.");
+        }
+
         $priced = $input->channel === Roll::CHANNEL_POS
             ? PricedCart::fromPos((int) $input->posSubtotalCents)
             : $this->pricer->price($shop, $settings, $input->lines);
@@ -154,6 +159,8 @@ class RollService
         $won = $won && $payout > 0;
 
         $isPos = $input->channel === Roll::CHANNEL_POS;
+        [$minPick, $maxPick] = $locked->pickRange();
+
         $roll = Roll::create([
             'shop_id' => $shop->id,
             'block_id' => $allocation?->blockId,
@@ -170,7 +177,7 @@ class RollService
             'eligible_subtotal' => $priced->eligibleSubtotal,
             'eligible_product_ids' => $priced->eligibleProductIds,
             'picked_number' => $input->pickedNumber,
-            'displayed_number' => $won ? $input->pickedNumber : self::losingFace($input->pickedNumber),
+            'displayed_number' => $won ? $input->pickedNumber : self::losingFace($input->pickedNumber, $minPick, $maxPick),
             'won' => $won,
             'payout' => $payout,
             // POS wins are applied directly to the till invoice, so no Shopify code is ever created.
@@ -305,10 +312,10 @@ class RollService
         RateLimiter::hit($burstKey, 600);
     }
 
-    public static function losingFace(int $picked): int
+    public static function losingFace(int $picked, int $min = 1, int $max = 10): int
     {
         do {
-            $face = random_int(1, 10);
+            $face = random_int($min, $max);
         } while ($face === $picked);
 
         return $face;

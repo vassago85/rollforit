@@ -113,6 +113,15 @@
     return die3dPromise;
   }
 
+  /* Split a target sum (2..12) into two valid d6 faces, random valid pair. */
+  function splitTwoDice(sum) {
+    const target = Math.max(2, Math.min(12, sum | 0));
+    const minFirst = Math.max(1, target - 6);
+    const maxFirst = Math.min(6, target - 1);
+    const first = minFirst + Math.floor(Math.random() * (maxFirst - minFirst + 1));
+    return [first, target - first];
+  }
+
   /* CSS fallback die: a kite-shaped face that flicks through numbers and lands on the target. */
   function cssDie(stage, anim) {
     stage.innerHTML = '<div class="rfi-cssdie" style="--rfi-die:' + esc(anim.die_color) + ';--rfi-num:' + esc(anim.number_color) + '"><span>?</span></div>';
@@ -136,6 +145,45 @@
       },
       show(n) { label.textContent = n; face.classList.add('rfi-cssdie--landed'); },
       stop() { clearInterval(timer); face.classList.remove('rfi-cssdie--rolling'); },
+      dispose() { clearInterval(timer); },
+    };
+  }
+
+  /* Two-dice fallback: a pair of d6s whose faces sum to the server's result. */
+  function cssTwoDice(stage, anim) {
+    stage.innerHTML = '<div class="rfi-twodice">'
+      + '<div class="rfi-cssdie rfi-cssdie--d6" style="--rfi-die:' + esc(anim.die_color) + ';--rfi-num:' + esc(anim.number_color) + '"><span>?</span></div>'
+      + '<div class="rfi-cssdie rfi-cssdie--d6" style="--rfi-die:' + esc(anim.die_color) + ';--rfi-num:' + esc(anim.number_color) + '"><span>?</span></div>'
+      + '</div>';
+    const [left, right] = stage.firstChild.children;
+    const labels = [left.firstChild, right.firstChild];
+    let timer = null;
+    const randPair = () => [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
+    return {
+      start() {
+        [left, right].forEach((d) => d.classList.add('rfi-cssdie--rolling'));
+        if (reduceMotion) return;
+        timer = setInterval(() => { const [a, b] = randPair(); labels[0].textContent = a; labels[1].textContent = b; }, 70);
+      },
+      async settle(sum) {
+        clearInterval(timer);
+        if (!reduceMotion) {
+          for (const delay of [90, 130, 180]) {
+            const [a, b] = randPair();
+            labels[0].textContent = a; labels[1].textContent = b;
+            await sleep(delay);
+          }
+        }
+        const [a, b] = splitTwoDice(sum);
+        labels[0].textContent = a; labels[1].textContent = b;
+        [left, right].forEach((d) => { d.classList.remove('rfi-cssdie--rolling'); d.classList.add('rfi-cssdie--landed'); });
+      },
+      show(sum) {
+        const [a, b] = splitTwoDice(sum);
+        labels[0].textContent = a; labels[1].textContent = b;
+        [left, right].forEach((d) => d.classList.add('rfi-cssdie--landed'));
+      },
+      stop() { clearInterval(timer); [left, right].forEach((d) => d.classList.remove('rfi-cssdie--rolling')); },
       dispose() { clearInterval(timer); },
     };
   }
@@ -277,9 +325,14 @@
 
     renderUpcoming() {
       const a = this.status.animation;
-      this.body.innerHTML = '<div class="rfi-stage rfi-stage--teaser" aria-hidden="true">'
-        + '<div class="rfi-cssdie rfi-cssdie--idle" style="--rfi-die:' + esc(a.die_color) + ';--rfi-num:' + esc(a.number_color) + '"><span>?</span></div></div>'
-        + '<p class="rfi-msg">The die is resting. Rolling opens ' + esc(this.status.next_roll.label) + '.</p>';
+      const teaser = this.status.dice_count === 2
+        ? '<div class="rfi-twodice">'
+          + '<div class="rfi-cssdie rfi-cssdie--d6 rfi-cssdie--idle" style="--rfi-die:' + esc(a.die_color) + ';--rfi-num:' + esc(a.number_color) + '"><span>?</span></div>'
+          + '<div class="rfi-cssdie rfi-cssdie--d6 rfi-cssdie--idle" style="--rfi-die:' + esc(a.die_color) + ';--rfi-num:' + esc(a.number_color) + '"><span>?</span></div>'
+          + '</div>'
+        : '<div class="rfi-cssdie rfi-cssdie--idle" style="--rfi-die:' + esc(a.die_color) + ';--rfi-num:' + esc(a.number_color) + '"><span>?</span></div>';
+      this.body.innerHTML = '<div class="rfi-stage rfi-stage--teaser" aria-hidden="true">' + teaser + '</div>'
+        + '<p class="rfi-msg">The dice are resting. Rolling opens ' + esc(this.status.next_roll.label) + '.</p>';
     }
 
     renderOwed() {
@@ -356,9 +409,14 @@
     }
 
     renderForm(error) {
-      const nums = Array.from({ length: 10 }, (_, i) => i + 1)
+      const range = (this.status.pick_range && typeof this.status.pick_range.min === 'number')
+        ? this.status.pick_range
+        : { min: 1, max: 10 };
+      const count = range.max - range.min + 1;
+      const grid = this.status.dice_count === 2 ? ' rfi-grid--wide' : '';
+      const nums = Array.from({ length: count }, (_, i) => i + range.min)
         .map((n) => '<button type="button" class="rfi-num" data-n="' + n + '" aria-pressed="' + (this.picked === n) + '">' + n + '</button>').join('');
-      this.body.innerHTML = '<p class="rfi-label">Pick your number</p><div class="rfi-grid" role="group" aria-label="Pick a number from 1 to 10">' + nums + '</div>'
+      this.body.innerHTML = '<p class="rfi-label">Pick your number</p><div class="rfi-grid' + grid + '" role="group" aria-label="Pick a number from ' + range.min + ' to ' + range.max + '">' + nums + '</div>'
         + '<p class="rfi-note">' + esc(this.status.disclaimer) + '</p>'
         + '<p class="rfi-min" hidden></p>'
         + (error ? '<p class="rfi-error" role="alert">' + esc(error) + '</p>' : '')
@@ -396,6 +454,10 @@
 
     async makeDie(stage) {
       const anim = this.status.animation;
+      // Two-dice mode uses the paired CSS dice; the 3D die binary only renders a single die.
+      if (this.status.dice_count === 2) {
+        return cssTwoDice(stage, anim);
+      }
       if (wants3D()) {
         try {
           const lib = await Promise.race([load3D(this.cfg.die3d), sleep(2500).then(() => { throw new Error('slow'); })]);

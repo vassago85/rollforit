@@ -32,7 +32,8 @@ final class RollSimulator
         string $channel = Roll::CHANNEL_ONLINE,
     ): array {
         $outcome = in_array($outcome, ['win', 'loss', 'random'], true) ? $outcome : 'random';
-        $pickedNumber = max(1, min(10, $pickedNumber));
+        [$minPick, $maxPick] = $settings->pickRange();
+        $pickedNumber = max($minPick, min($maxPick, $pickedNumber));
 
         if (! $settings->min_order || ! $settings->max_payout) {
             throw new RollRejected(RollRejected::CLOSED, 'Set a minimum order and maximum payout first.');
@@ -62,7 +63,7 @@ final class RollSimulator
         $roll = new Roll;
         $roll->shop_id = $shop->id;
         $roll->picked_number = $pickedNumber;
-        $roll->displayed_number = $won ? $pickedNumber : RollService::losingFace($pickedNumber);
+        $roll->displayed_number = $won ? $pickedNumber : RollService::losingFace($pickedNumber, $minPick, $maxPick);
         $roll->won = $won;
         $roll->payout = $payout;
         $roll->discount_code = $code;

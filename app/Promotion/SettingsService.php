@@ -19,7 +19,7 @@ class SettingsService
 
     private const TERMS_FIELDS = [
         'promo_days', 'start_time', 'end_time', 'min_order', 'max_payout', 'max_payout_percent', 'daily_budget',
-        'max_winners_per_day', 'excluded_collections', 'odds_mode', 'odds_n',
+        'max_winners_per_day', 'excluded_collections', 'odds_mode', 'odds_n', 'dice_count',
         'promoter_name', 'promoter_registration_number', 'promoter_address', 'promoter_email', 'promoter_phone',
     ];
 
@@ -37,6 +37,7 @@ class SettingsService
             'enabled' => ['required', 'boolean'],
             'odds_mode' => ['required', 'in:'.ShopSettings::MODE_GUARANTEED.','.ShopSettings::MODE_CHANCE],
             'odds_n' => ['required', 'integer', 'min:2', 'max:1000'],
+            'dice_count' => ['sometimes', 'integer', 'in:1,2'],
             'promo_days' => ['present', 'array'],
             'promo_days.*' => ['integer', 'between:1,7', 'distinct'],
             'start_time' => ['nullable', 'date_format:H:i', 'required_with:end_time'],
@@ -143,6 +144,7 @@ class SettingsService
                 'enabled' => (bool) $settings->enabled,
                 'odds_mode' => $settings->odds_mode,
                 'odds_n' => (int) $settings->odds_n,
+                'dice_count' => (int) $settings->dice_count,
                 'promo_days' => array_map('intval', $settings->promo_days ?? []),
                 'start_time' => $settings->start_time,
                 'end_time' => $settings->end_time,
