@@ -119,21 +119,35 @@ it('pays max_payout on a cart above it, so the customer pays the remainder', fun
         ->and($create['usageLimit'])->toBe(1)
         ->and($create['context'])->toBe(['all' => 'ALL'])
         ->and($create['combinesWith'])->toBe(['productDiscounts' => false, 'orderDiscounts' => false, 'shippingDiscounts' => false])
-        ->and($create['minimumRequirement']['subtotal']['greaterThanOrEqualToSubtotal'])->toBe('500.00')
+        ->and($create['minimumRequirement']['subtotal']['greaterThanOrEqualToSubtotal'])->toBe('1500.00')
         ->and($create['customerGets']['items'])->toBe(['all' => true])
         ->and($create)->not->toHaveKey('customerSelection');
 });
 
-it('expires the code at the end of the promo day in shop time', function () {
+it('expires the code 30 minutes after it was issued, not end-of-day', function () {
     $shop = makeShop();
     forceNextWin($shop);
     $calls = fakeShopify([1 => ['price' => '600.00']]);
     roll($shop)->assertOk();
 
     $endsAt = collect($calls)->firstWhere('operation', 'CreateRollCode')['variables']['basicCodeDiscount']['endsAt'];
-    $expected = now('Africa/Johannesburg')->endOfDay()->utc();
+    $expected = now()->addMinutes(30);
 
-    expect(CarbonImmutable::parse($endsAt)->timestamp)->toBe($expected->timestamp);
+    // Allow 5 seconds of slack for test runtime between roll() and expected calc.
+    expect(abs(CarbonImmutable::parse($endsAt)->timestamp - $expected->timestamp))->toBeLessThan(5);
+});
+
+it('locks the minimum subtotal to the exact cart the shopper rolled on', function () {
+    // Shopper rolled on a R1,800 cart — they cannot shrink the cart to R500
+    // post-win and still redeem. (They can add more items; only downgrades blocked.)
+    $shop = makeShop();
+    forceNextWin($shop);
+    $calls = fakeShopify([1 => ['price' => '900.00']]);
+
+    roll($shop, ['lines' => [['variant_id' => 1, 'quantity' => 2]]])->assertOk();
+
+    $create = collect($calls)->firstWhere('operation', 'CreateRollCode')['variables']['basicCodeDiscount'];
+    expect($create['minimumRequirement']['subtotal']['greaterThanOrEqualToSubtotal'])->toBe('1800.00');
 });
 
 it('scopes the code to eligible products when collections are excluded', function () {
@@ -149,7 +163,9 @@ it('scopes the code to eligible products when collections are excluded', functio
 
     expect($result['payout'])->toBe(60000)
         ->and($create['customerGets']['items'])->toBe(['products' => ['productsToAdd' => ['gid://shopify/Product/11']]])
-        ->and($create['minimumRequirement']['subtotal']['greaterThanOrEqualToSubtotal'])->toBe('500.00');
+        // Eligible subtotal is R600 (only variant 1 counts, variant 2 is excluded),
+        // so the cart lock sits at R600 — above the R500 settings minimum.
+        ->and($create['minimumRequirement']['subtotal']['greaterThanOrEqualToSubtotal'])->toBe('600.00');
 });
 
 it('reduces a win near the daily budget to the remaining budget', function () {

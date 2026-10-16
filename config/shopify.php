@@ -26,6 +26,9 @@ return [
         'ip_rolls_per_10_minutes' => (int) env('ROLL_IP_PER_10_MIN', 3),
         'max_cart_lines' => 100,
         'max_line_quantity' => 999,
+        // Online discount codes expire this many minutes after they're issued.
+        // Short on purpose: the win is yours for this cart, not for the week.
+        'code_minutes' => (int) env('ROLL_CODE_MINUTES', 30),
     ],
 
     'retention' => [

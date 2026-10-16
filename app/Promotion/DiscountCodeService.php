@@ -39,9 +39,13 @@ class DiscountCodeService
         }
 
         $code = $roll->discount_code ?: self::generateCode($roll->is_test);
+        // Codes have a short, hard deadline from the moment they're issued so the
+        // win rewards the cart the shopper rolled on, not a future visit. POS
+        // rolls are redeemed in-store immediately so this limit is irrelevant to
+        // them; test rolls use their own merchant-tunable preview window.
         $endsAt = $roll->is_test
             ? CarbonImmutable::now()->addMinutes(config('shopify.test_mode.code_minutes'))
-            : (new PromoWindow($settings, $shop->timezone))->endOfDay($roll->promo_date->toDateString());
+            : CarbonImmutable::now()->addMinutes((int) config('shopify.roll.code_minutes', 30));
 
         $roll->forceFill([
             'discount_code' => $code,
@@ -88,11 +92,13 @@ class DiscountCodeService
         $productIds = $roll->eligible_product_ids ?? [];
         $scoped = $settings->excludedCollectionIds() !== [] && $productIds !== [];
 
-        // Product-scoped minimums only count entitled items, so cap the minimum at
-        // what the eligible items were worth when the customer rolled.
-        $minimum = $scoped
-            ? min((int) $settings->min_order, $roll->eligible_subtotal)
-            : (int) $settings->min_order;
+        // The code is for THIS cart. Lock the minimum to the eligible subtotal the
+        // shopper rolled on, so they cannot win on a R5,000 cart, remove items
+        // down to R500, and redeem the discount on a smaller purchase. Adding
+        // more items (bigger cart) is still fine — only downgrades are blocked.
+        // They already passed min_order when they rolled, so we don't need to
+        // re-enforce it here.
+        $minimum = (int) $roll->eligible_subtotal;
 
         return [
             'title' => sprintf('Roll4It %s%s (%s)', $roll->is_test ? 'TEST ' : '', $roll->promo_date->toDateString(), $code),

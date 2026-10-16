@@ -24,7 +24,7 @@
 
     <s-section heading="Revenue vs prizes">
         <s-stack gap="base">
-            <s-paragraph color="subdued">Orders from the promo window start to midnight (codes stay valid all day). Test and cancelled orders are excluded; amounts are after refunds. Shopify only lets apps read the last 60 days of orders, so each promo day is saved automatically 30 minutes after it ends.</s-paragraph>
+            <s-paragraph color="subdued">Orders from the promo window start to midnight (each code is live for 30 minutes after it's issued and only redeems on the exact cart the shopper rolled on). Test and cancelled orders are excluded; amounts are after refunds. Shopify only lets apps read the last 60 days of orders, so each promo day is saved automatically 30 minutes after it ends.</s-paragraph>
             <s-banner id="today-metrics-error" tone="warning" hidden></s-banner>
             <s-box id="today-metrics" padding="base" background="subdued" borderRadius="base" hidden>
                 <s-stack gap="small-200">

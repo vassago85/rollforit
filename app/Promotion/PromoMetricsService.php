@@ -39,7 +39,10 @@ class PromoMetricsService
     public function __construct(private readonly ShopifyAdmin $admin) {}
 
     /**
-     * From the window start to the end of the promo day, because codes stay valid until then.
+     * From the window start to the end of the promo day. Individual codes only
+     * live 30 minutes, but we still want to count the orders they drove across
+     * the whole day — a shopper who rolls at 10am and checks out at 10:25 is
+     * part of that day's revenue, even though their code is already dead by 11.
      *
      * @return array{0: CarbonImmutable, 1: CarbonImmutable}
      */

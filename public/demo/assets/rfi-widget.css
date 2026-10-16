@@ -75,6 +75,18 @@
 .rfi-code-resend a { color: var(--rfi-accent); text-decoration: underline; font-weight: 600; }
 .rfi-code-resend a:hover { filter: brightness(0.9); }
 
+/* 30-minute "redeem on this cart" countdown chip. Starts cool, goes amber in
+   the last minute, and flips red + strikes out the code when it expires. */
+.rfi-code-timer {
+  margin: 10px 0 0; padding: 8px 12px; border-radius: 8px;
+  background: #f3f4f6; color: #374151;
+  font-size: 0.82em; font-weight: 600; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.rfi-code-timer--urgent { background: #fef3c7; color: #92400e; }
+.rfi-code-timer--dead { background: #fee2e2; color: #991b1b; }
+.rfi-note--muted { color: #9ca3af; text-decoration: line-through; }
+
 .rfi-roll {
   display: block; width: 100%; margin-top: 14px; padding: 14px 16px;
   border: 0; border-radius: 10px;

@@ -361,6 +361,7 @@
 
     async init(fresh) {
       this.stopCountdown();
+      this.stopCodeCountdown();
       const status = (this.status = await getStatus(this.cfg.proxy, fresh));
       const hide = !visible(status) || (this.cfg.currency && status.currency && this.cfg.currency !== status.currency);
       if (hide) { this.host.hidden = true; return; }
@@ -495,6 +496,52 @@
     stopCountdown() {
       clearInterval(this.countdown);
       this.countdown = null;
+    }
+
+    stopCodeCountdown() {
+      clearInterval(this.codeCountdown);
+      this.codeCountdown = null;
+    }
+
+    /**
+     * Shows a MM:SS timer counting down to result.ends_at (ISO 8601). When the
+     * code lapses, the chip flips red and the code itself is hidden so the
+     * shopper doesn't paste a dead code at checkout.
+     */
+    startCodeCountdown(result) {
+      this.stopCodeCountdown();
+      if (!result || !result.ends_at) return;
+
+      const target = new Date(result.ends_at).getTime();
+      if (!isFinite(target)) return;
+
+      const chip = document.createElement('p');
+      chip.className = 'rfi-code-timer';
+      this.body.appendChild(chip);
+
+      const tick = () => {
+        const remaining = Math.round((target - Date.now()) / 1000);
+        if (remaining <= 0) {
+          this.stopCodeCountdown();
+          chip.classList.add('rfi-code-timer--dead');
+          chip.textContent = 'Your code has expired. The win was only valid for this cart.';
+          // Scrub the code line so no one copy-pastes a dead code at checkout.
+          const notes = this.body.querySelectorAll('.rfi-note');
+          notes.forEach((n) => {
+            if (n.textContent && n.textContent.indexOf(result.code) >= 0) {
+              n.textContent = 'Code expired. Finish checkout before the next roll opens to lock in a win.';
+              n.classList.add('rfi-note--muted');
+            }
+          });
+          return;
+        }
+        const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+        const ss = String(remaining % 60).padStart(2, '0');
+        chip.textContent = 'Code expires in ' + mm + ':' + ss + ' — redeem this cart now.';
+        if (remaining <= 60) chip.classList.add('rfi-code-timer--urgent');
+      };
+      tick();
+      this.codeCountdown = setInterval(tick, 1000);
     }
 
     /**
@@ -814,11 +861,13 @@
         } catch (e) {
           note.textContent = 'Use code ' + result.code + ' at checkout.';
         }
+        this.startCodeCountdown(result);
       } else if (result.won && result.code) {
         const note = document.createElement('p');
         note.className = 'rfi-note';
         note.textContent = 'Your code: ' + result.code;
         this.body.appendChild(note);
+        this.startCodeCountdown(result);
       }
 
       // Share-a-win: only on a real win (not test / not POS), and only when the result makes sense to share.
