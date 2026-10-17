@@ -104,9 +104,9 @@
                         <dl class="rfi-lab-diag" id="lab-caps">
                             <dt>Min order</dt><dd id="lab-cap-min">-</dd>
                             <dt>Max payout</dt><dd id="lab-cap-max">-</dd>
-                            <dt>Max % of cart</dt><dd id="lab-cap-pct">-</dd>
+                            <dt>Prize %</dt><dd id="lab-cap-pct">-</dd>
                             <dt>Odds</dt><dd id="lab-cap-odds">-</dd>
-                            <dt>Dice</dt><dd id="lab-cap-dice">-</dd>
+                            <dt>Game</dt><dd id="lab-cap-game">-</dd>
                         </dl>
                     </s-stack>
                 </s-box>
@@ -114,11 +114,11 @@
                 <s-box padding="base" background="subdued" borderRadius="base" style="margin-top:16px">
                     <s-stack gap="small-200">
                         <s-text font-weight="bold">What the widget sees</s-text>
-                        <p class="rfi-lab-note" style="margin:0">The actual dice count and pick range the widget just drew. If this disagrees with the Current caps card above, the widget is out of sync — fix it by starting a new roll.</p>
+                        <p class="rfi-lab-note" style="margin:0">What the widget just drew from your saved settings. If this disagrees with the Current caps card above, start a new roll.</p>
                         <dl class="rfi-lab-diag" id="lab-seen">
-                            <dt>Dice drawn</dt><dd id="lab-seen-dice">waiting for the widget…</dd>
+                            <dt>Game drawn</dt><dd id="lab-seen-game">waiting for the widget…</dd>
                             <dt>Pick buttons</dt><dd id="lab-seen-range">—</dd>
-                            <dt>Roll button</dt><dd id="lab-seen-label">—</dd>
+                            <dt>Play button</dt><dd id="lab-seen-label">—</dd>
                         </dl>
                     </s-stack>
                 </s-box>
@@ -174,13 +174,18 @@
   function setCaps() {
     const s = state.settings;
     const sym = state.shop.symbol;
+    const doubleGame = s.game === 'double';
     el('lab-cap-min').textContent = s.min_order ? centsToMoney(s.min_order, sym) : 'not set';
     el('lab-cap-max').textContent = s.max_payout ? centsToMoney(s.max_payout, sym) : 'not set';
-    el('lab-cap-pct').textContent = s.max_payout_percent ? (s.max_payout_percent + '%') : 'no percentage cap';
+    el('lab-cap-pct').textContent = doubleGame
+      ? (s.base_percent + '% keep · ' + s.double_percent + '% if they risk it')
+      : (s.max_payout_percent ? (s.max_payout_percent + '%') : 'no percentage cap');
     el('lab-cap-odds').textContent = (s.odds_mode === 'guaranteed' ? '1 in every ' : '1 in ') + s.odds_n + (s.odds_mode === 'guaranteed' ? ' entries' : ' chance');
-    el('lab-cap-dice').textContent = s.dice_count === 2
-      ? '2 dice (pick ' + s.pick_range.min + '–' + s.pick_range.max + ')'
-      : '1 die (pick ' + s.pick_range.min + '–' + s.pick_range.max + ')';
+    el('lab-cap-game').textContent = doubleGame
+      ? 'Double or nothing (pick ' + s.pick_range.min + '–' + s.pick_range.max + ')'
+      : (s.dice_count === 2
+        ? '2 dice (pick ' + s.pick_range.min + '–' + s.pick_range.max + ')'
+        : '1 die (pick ' + s.pick_range.min + '–' + s.pick_range.max + ')');
     if (s.min_order && !el('lab-cart').value) {
       el('lab-cart').value = String(Math.round(s.min_order * 1.2) / 100);
     }
@@ -188,6 +193,7 @@
 
   function pickCopy() {
     const s = state && state.settings;
+    if (s && s.game === 'double') return 'Pick one · Play';
     if (s && s.dice_count === 2) return 'Pick a sum · Roll the dice';
     return 'Pick a number · Roll the die';
   }
@@ -209,21 +215,29 @@
   }
 
   /* Fed by the `rendered` message the iframe posts after every pick-form draw.
-     Compare what the widget actually drew to what the shop's settings say and
-     flag any disagreement, so a dice_count=2 shop never silently renders a
-     1-die grid without the merchant noticing. */
+     Compare what the widget actually drew to the shop's saved settings so a
+     dice_count or game change never silently renders the wrong board. */
   function renderSeen(seen) {
     if (!state) return;
     const s = state.settings;
-    const diceOk = Number(seen.dice_count) === Number(s.dice_count);
+    const wantGame = s.game || 'dice';
+    const gotGame = seen.game || 'dice';
+    const gameOk = gotGame === wantGame;
+    const diceOk = wantGame === 'double' || Number(seen.dice_count) === Number(s.dice_count);
     const rangeOk = Number(seen.pick_min) === Number(s.pick_range.min) && Number(seen.pick_max) === Number(s.pick_range.max);
-    const warn = (txt, ok) => ok ? esc(txt) : '⚠ ' + esc(txt) + ' (settings say ';
-    el('lab-seen-dice').textContent = (diceOk ? '' : '⚠ ') + seen.dice_count + (seen.dice_count === 2 ? ' dice' : ' die')
-      + (diceOk ? '' : ' — settings say ' + s.dice_count);
+    const boardOk = gameOk && diceOk;
+    const boardLabel = gotGame === 'double'
+      ? 'Double or nothing'
+      : (seen.dice_count === 2 ? '2 dice' : '1 die');
+    const wantLabel = wantGame === 'double'
+      ? 'Double or nothing'
+      : (s.dice_count === 2 ? '2 dice' : '1 die');
+    el('lab-seen-game').textContent = (boardOk ? '' : '⚠ ') + boardLabel
+      + (boardOk ? '' : ' — settings say ' + wantLabel);
     el('lab-seen-range').textContent = (rangeOk ? '' : '⚠ ') + seen.pick_min + '–' + seen.pick_max + ' (' + seen.pick_count + ' buttons)'
       + (rangeOk ? '' : ' — settings say ' + s.pick_range.min + '–' + s.pick_range.max);
     el('lab-seen-label').textContent = seen.roll_button_label || '—';
-    el('lab-seen-dice').className = diceOk ? '' : 'warn';
+    el('lab-seen-game').className = boardOk ? '' : 'warn';
     el('lab-seen-range').className = rangeOk ? '' : 'warn';
   }
 
@@ -250,14 +264,16 @@
   const cartCents = () => moneyToCents(el('lab-cart').value) || 0;
 
   function frameConfig() {
-    // The caps block above reads dice_count/pick_range straight from state.settings.
-    // Overlay the same values onto the widget status so the two displays can never
-    // disagree — if a stale `widget.status.dice_count` ever slips in (e.g. an older
-    // cached simulator payload), the merchant still sees the widget match the caps.
+    // Overlay the shop's saved game settings onto the widget status so the Test
+    // lab always matches Settings — never a stale cached status, and never a
+    // separate lab-only game mode.
     const s = state.settings;
     return {
       status: Object.assign({}, state.widget.status, {
         logged_in: el('lab-customer').value === 'signed_in',
+        game: s.game || 'dice',
+        base_percent: s.base_percent,
+        double_percent: s.double_percent,
         dice_count: s.dice_count,
         pick_range: s.pick_range,
       }),
@@ -277,8 +293,8 @@
     if (!state || !state.widget) return;
     landing = null;
     setTable(null, pickCopy());
-    el('lab-seen-dice').textContent = 'waiting for the widget…';
-    el('lab-seen-dice').className = '';
+    el('lab-seen-game').textContent = 'waiting for the widget…';
+    el('lab-seen-game').className = '';
     el('lab-seen-range').textContent = '—';
     el('lab-seen-range').className = '';
     el('lab-seen-label').textContent = '—';

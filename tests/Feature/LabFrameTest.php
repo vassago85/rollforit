@@ -30,26 +30,30 @@ it('ships the lab-frame glue with the dice-safe remount and rendered-callback be
     expect($glue)->toContain("type: 'rendered'")
         ->and($glue)->toContain('pick_min')
         ->and($glue)->toContain('pick_max')
-        ->and($glue)->toContain('dice_count');
+        ->and($glue)->toContain('dice_count')
+        ->and($glue)->toContain('game');
 });
 
-it('overlays saved dice_count and pick_range onto the widget status so the Test lab can never render a stale grid', function () {
+it('overlays saved game settings onto the widget status so the Test lab matches Settings', function () {
     $view = file_get_contents(resource_path('views/admin/simulator.blade.php'));
 
     expect($view)->not->toBeFalse();
 
-    // frameConfig() must override status.dice_count / pick_range with the
+    // frameConfig() must override status.game / dice_count / pick_range with the
     // values just fetched from the simulator endpoint. Without this overlay a
-    // dice_count=2 shop would still boot the widget with a 1-die grid when the
-    // widget's cached status predates the dice-count change.
-    expect($view)->toContain('dice_count: s.dice_count')
-        ->and($view)->toContain('pick_range: s.pick_range');
+    // double-or-nothing shop (or a dice_count=2 shop) would still boot the
+    // widget with a stale board when the cached status predates the change.
+    expect($view)->toContain("game: s.game || 'dice'")
+        ->and($view)->toContain('dice_count: s.dice_count')
+        ->and($view)->toContain('pick_range: s.pick_range')
+        ->and($view)->toContain('base_percent: s.base_percent')
+        ->and($view)->toContain('double_percent: s.double_percent');
 
     // The "What the widget sees" diagnostic card lets the merchant spot a
     // caps-vs-widget mismatch at a glance. Its three readouts and the
     // rendered-message handler must stay wired up.
     expect($view)->toContain('What the widget sees')
-        ->and($view)->toContain('lab-seen-dice')
+        ->and($view)->toContain('lab-seen-game')
         ->and($view)->toContain('lab-seen-range')
         ->and($view)->toContain("msg.type === 'rendered'")
         ->and($view)->toContain('renderSeen(');

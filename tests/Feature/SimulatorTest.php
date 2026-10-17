@@ -157,10 +157,32 @@ it('reports the dice count and pick range so the lab caps card matches the store
 
     $response = admin($shop)->getJson('/api/admin/simulator')->assertOk();
 
-    expect($response->json('settings.dice_count'))->toBe(2)
+    expect($response->json('settings.game'))->toBe('dice')
+        ->and($response->json('settings.dice_count'))->toBe(2)
         ->and($response->json('settings.pick_range'))->toBe(['min' => 2, 'max' => 12])
+        ->and($response->json('widget.status.game'))->toBe('dice')
         ->and($response->json('widget.status.dice_count'))->toBe(2)
         ->and($response->json('widget.status.pick_range'))->toBe(['min' => 2, 'max' => 12]);
+});
+
+it('hands the lab the double-or-nothing settings the storefront uses', function () {
+    $shop = makeShop([
+        'game' => \App\Models\ShopSettings::GAME_DOUBLE,
+        'odds_n' => 6,
+        'base_percent' => 5,
+        'double_percent' => 10,
+    ]);
+
+    $response = admin($shop)->getJson('/api/admin/simulator')->assertOk();
+
+    expect($response->json('settings.game'))->toBe('double')
+        ->and($response->json('settings.base_percent'))->toBe(5)
+        ->and($response->json('settings.double_percent'))->toBe(10)
+        ->and($response->json('settings.pick_range'))->toBe(['min' => 1, 'max' => 6])
+        ->and($response->json('widget.status.game'))->toBe('double')
+        ->and($response->json('widget.status.base_percent'))->toBe(5)
+        ->and($response->json('widget.status.double_percent'))->toBe(10)
+        ->and($response->json('widget.status.pick_range'))->toBe(['min' => 1, 'max' => 6]);
 });
 
 it('accepts a two-dice pick in the lab roll endpoint', function () {

@@ -11,8 +11,8 @@
  *      pick_range changes always take effect. The widget's own init(true)
  *      short-circuits on `busy`, so we never trust it.
  *   3. After each pick-form render, post a `rendered` message back to the
- *      parent with the dice_count / pick_range the widget actually drew. The
- *      parent displays this as "What the widget sees" so a settings↔widget
+ *      parent with the game / dice_count / pick_range the widget actually drew.
+ *      The parent displays this as "What the widget sees" so a settings↔widget
  *      disagreement is impossible to miss.
  */
 (() => {
@@ -123,13 +123,15 @@
     const picks = buttons.map((b) => Number(b.dataset.n)).filter((n) => !Number.isNaN(n));
     if (picks.length === 0) return;
     const w = widget();
+    const game = (w && w.status && w.status.game) || 'dice';
     const dice = (w && w.status && w.status.dice_count) || (picks.length === 11 && picks[0] === 2 ? 2 : 1);
-    const key = dice + '|' + Math.min(...picks) + '|' + Math.max(...picks) + '|' + picks.length;
+    const key = game + '|' + dice + '|' + Math.min(...picks) + '|' + Math.max(...picks) + '|' + picks.length;
     if (key === lastReportedKey) return;
     lastReportedKey = key;
     post({
       type: 'rendered',
       rendered: {
+        game: game,
         dice_count: dice,
         pick_min: Math.min(...picks),
         pick_max: Math.max(...picks),

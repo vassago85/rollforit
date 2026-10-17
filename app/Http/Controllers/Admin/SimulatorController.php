@@ -44,6 +44,9 @@ class SimulatorController extends Controller
                 'max_payout_percent' => $settings->max_payout_percent !== null ? (int) $settings->max_payout_percent : null,
                 'odds_n' => (int) $settings->odds_n,
                 'odds_mode' => $settings->odds_mode,
+                'game' => $settings->game ?: ShopSettings::GAME_DICE,
+                'base_percent' => (int) ($settings->base_percent ?: 5),
+                'double_percent' => (int) ($settings->double_percent ?: 10),
                 'dice_count' => (int) $settings->dice_count,
                 'pick_range' => (function () use ($settings) {
                     [$min, $max] = $settings->pickRange();
