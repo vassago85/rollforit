@@ -769,7 +769,7 @@
       const stage = this.body.querySelector('.rfi-stage');
       let die = null;
       if (cards) {
-        stage.innerHTML = '<div class="rfi-card rfi-card--flip">' + esc(String(this.picked)) + '</div>';
+        stage.innerHTML = '<div class="rfi-face">' + esc(String(this.picked)) + '</div>';
       } else {
         die = await this.makeDie(stage);
         die.start();
@@ -841,7 +841,7 @@
         this.body.innerHTML = '<div class="rfi-stage" aria-hidden="true"></div>';
         const stage = this.body.querySelector('.rfi-stage');
         if (this.status.game === 'double') {
-          stage.innerHTML = '<div class="rfi-card">' + esc(String(result.displayed_number)) + '</div>';
+          stage.innerHTML = '<div class="rfi-face">' + esc(String(result.displayed_number)) + '</div>';
         } else {
           const renderer = this.status.dice_count === 2 ? cssTwoDice(stage, anim) : cssDie(stage, anim);
           renderer.show(result.displayed_number);

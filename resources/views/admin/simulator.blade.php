@@ -57,7 +57,7 @@
 @section('content')
 <s-page heading="Test lab">
     <s-banner tone="info" heading="This is a sandbox">
-        <s-paragraph>The table plays the real storefront widget: the 3D die, the sound, confetti on a win, the countdown to the next roll, the streak badge and the "could have won" teaser. Nothing reaches a real customer. No discount codes are created, no entries are recorded, your daily budget is untouched, and every code starts with <b>SIM-</b>.</s-paragraph>
+        <s-paragraph>Plays the real storefront widget with your saved Settings. Nothing reaches a customer, no codes are created, and every simulated code starts with <b>SIM-</b>.</s-paragraph>
     </s-banner>
 
     <s-banner id="lab-blockers" tone="warning" heading="Finish setup before testing" hidden>
@@ -68,21 +68,12 @@
         <div class="rfi-lab">
             <div>
                 <s-stack gap="base">
-                    <s-number-field id="lab-cart" label="Cart value" prefix="R" min="0.01" step="0.01" details="What the eligible items in the simulated cart are worth."></s-number-field>
-                    <s-select id="lab-outcome" label="Outcome">
+                    <s-number-field id="lab-cart" label="Cart value" prefix="R" min="0.01" step="0.01" details="Eligible cart total for this simulated roll. Game, odds, and prizes come from Settings."></s-number-field>
+                    <s-select id="lab-outcome" label="Outcome" details="Force a result so you don't have to wait on the real odds.">
                         <s-option value="random">Use the real odds</s-option>
                         <s-option value="win" selected>Force a win</s-option>
                         <s-option value="loss">Force a loss</s-option>
                     </s-select>
-                    <s-select id="lab-channel" label="Channel">
-                        <s-option value="online" selected>Online storefront</s-option>
-                        <s-option value="pos">Point of sale (POS)</s-option>
-                    </s-select>
-                    <s-select id="lab-customer" label="Customer">
-                        <s-option value="guest" selected>Guest (enters an email)</s-option>
-                        <s-option value="signed_in">Signed in to their account</s-option>
-                    </s-select>
-                    <s-number-field id="lab-streak" label="Streak" min="1" max="60" step="1" value="3" details="Promo days in a row this customer has rolled, counting this roll. Two or more shows the streak badge."></s-number-field>
                     <s-button id="lab-deal" variant="primary">New roll</s-button>
                 </s-stack>
 
@@ -253,7 +244,6 @@
       ['Cart subtotal (as cap)', esc(d.cart_subtotal_formatted), d.binding_cap === 'cart' ? 'hit' : ''],
       ['Which cap bit this roll', d.binding_cap === 'none' ? '(loss, no cap applied)' : d.binding_cap.replace('_', ' '), ''],
       ['Odds statement', esc(d.odds), ''],
-      ['Channel', esc(d.channel), ''],
     ];
     el('lab-diag').innerHTML = rows.map(([k, v, cls]) =>
       '<dt>' + esc(k) + '</dt><dd class="' + cls + '">' + v + '</dd>'
@@ -266,11 +256,11 @@
   function frameConfig() {
     // Overlay the shop's saved game settings onto the widget status so the Test
     // lab always matches Settings — never a stale cached status, and never a
-    // separate lab-only game mode.
+    // separate lab-only game mode. Signed-in so the email step stays out of the way.
     const s = state.settings;
     return {
       status: Object.assign({}, state.widget.status, {
-        logged_in: el('lab-customer').value === 'signed_in',
+        logged_in: true,
         game: s.game || 'dice',
         base_percent: s.base_percent,
         double_percent: s.double_percent,
@@ -278,7 +268,7 @@
         pick_range: s.pick_range,
       }),
       cart: cartCents(),
-      streak: parseInt(el('lab-streak').value, 10) || 1,
+      streak: 1,
       email: 'customer@example.com',
       storefront_url: state.shop.storefront_url,
     };
@@ -311,7 +301,7 @@
         cart_value: el('lab-cart').value,
         outcome: el('lab-outcome').value,
         picked_number: msg.picked_number,
-        channel: el('lab-channel').value,
+        channel: 'online',
       });
       landing = data;
       reply = { status: 200, body: Object.assign({}, data.result, { test: false }) };
@@ -368,8 +358,6 @@
 
   el('lab-deal').addEventListener('click', deal);
   el('lab-cart').addEventListener('input', () => send({ type: 'cart', cart: cartCents() }));
-  el('lab-customer').addEventListener('change', deal);
-  el('lab-streak').addEventListener('change', deal);
 
   // Shopify Admin is a SPA and happily keeps this page's DOM alive when the
   // merchant navigates away and back (or into a modal). Without this, state

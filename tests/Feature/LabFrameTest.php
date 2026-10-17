@@ -34,6 +34,20 @@ it('ships the lab-frame glue with the dice-safe remount and rendered-callback be
         ->and($glue)->toContain('game');
 });
 
+it('keeps the double-or-nothing reveal class off .rfi-card so the widget shell is never crushed to 72px', function () {
+    $css = file_get_contents(base_path('extensions/roll-for-it/assets/rfi-widget.css'));
+    $js = file_get_contents(base_path('extensions/roll-for-it/assets/rfi-widget.js'));
+
+    expect($css)->not->toBeFalse()->and($js)->not->toBeFalse();
+
+    // A later `.rfi-card { width: 72px }` rule once overwrote the storefront
+    // card and made the Test lab show a tiny orange stub with spilled copy.
+    expect($css)->toContain('.rfi-face {')
+        ->and($css)->not->toMatch('/\.rfi-card\s*\{\s*width:\s*72px/')
+        ->and($js)->toContain('rfi-face')
+        ->and($js)->not->toContain('rfi-card rfi-card--flip');
+});
+
 it('overlays saved game settings onto the widget status so the Test lab matches Settings', function () {
     $view = file_get_contents(resource_path('views/admin/simulator.blade.php'));
 
